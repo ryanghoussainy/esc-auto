@@ -3,9 +3,15 @@ Read the qualifiers excel sheet and store the data.
 '''
 
 import pandas as pd
+import re
 
 
-def extract_tables(file: str, sheet_name: str, header_identifiers: list[(str, int)]) -> list[pd.DataFrame]:
+def extract_tables(
+        file: str,
+        sheet_name: str,
+        header_identifiers: list[(str, int)],
+        get_events: bool = False,
+) -> tuple[list[pd.DataFrame], list[str]]:
     '''
     Extracts all tables from the given excel sheet.
     Each table must have a row where the first cell contains "first" and "name".
@@ -13,7 +19,31 @@ def extract_tables(file: str, sheet_name: str, header_identifiers: list[(str, in
     The end of a table is identified by an empty row.
     '''
 
-    def is_header(row: str) -> bool:
+    def get_event_name(row_str) -> str:
+        '''
+        Extract the event name from the input string.
+        e.g. "Event  21   Girls 8 & Under 25 SC Meter Breaststroke" -> "25m Breast"
+        '''
+        pattern = r"\b(25|50|100|200)\s*SC\s*Meter\s*(Freestyle|Backstroke|Breaststroke|Butterfly|IM)"
+        match = re.search(pattern, row_str, re.IGNORECASE)
+
+        if match:
+            distance = match.group(1)
+            stroke = match.group(2)
+
+            stroke_map = {
+                "Freestyle": "Free",
+                "Backstroke": "Back",
+                "Breaststroke": "Breast",
+                "Butterfly": "Fly",
+                "IM": "IM"
+            }
+            formatted_stroke = stroke_map[stroke]
+            return f"{distance}m {formatted_stroke}"
+        else:
+            raise ValueError(f"Invalid event name: {row_str}")
+
+    def is_header(row: pd.Series) -> bool:
         '''
         Returns true if and only if the row is a header.
         '''
@@ -24,14 +54,19 @@ def extract_tables(file: str, sheet_name: str, header_identifiers: list[(str, in
         return False
     
     # Read the excel file
-    df = pd.read_excel(file, sheet_name=sheet_name or 0)
+    df = pd.read_excel(file, sheet_name=sheet_name or 0, header=None)
 
-    tables = []  # To store individual tables
+    tables: list[pd.DataFrame] = []  # To store individual tables
     current_table = []  # Temporary storage for the current table
+    events = []  # To store the event names
     headers_found = False
 
     # Iterate through each row
     for _, row in df.iterrows():
+        # If we are looking for events and the line contains "Event", then extract the event names
+        first_cell_str = str(row.iloc[0])
+        if get_events and first_cell_str.startswith("Event"):
+            events.append(get_event_name(first_cell_str))
         # If the row is a header, then start a new table.
         if is_header(row):
             # If we have already started a previous table, then save it to the list of tables.
@@ -58,8 +93,23 @@ def extract_tables(file: str, sheet_name: str, header_identifiers: list[(str, in
     # Filter out empty tables
     tables = [table for table in tables if not table.empty]
 
-    return tables
+    return tables, events
 
+
+def concat_tables(tables: list[pd.DataFrame]) -> pd.DataFrame:
+    '''
+    Concatenate all tables into a single table.
+    '''
+    return pd.concat(tables, ignore_index=True)
+
+
+def print_first_rows(table: pd.DataFrame, n: int):
+    '''
+    Pretty print the first n rows of the table.
+    '''
+    pd.set_option('display.max_columns', None)
+    print(table.head(n))
+    pd.reset_option('display.max_columns')
 
 def print_tables(tables: list[pd.DataFrame]):
     '''
