@@ -132,10 +132,10 @@ def leahify_qualifiers(
                         print(f"Is this the right match? \033[93m{lfirst_name.capitalize()} {lsurname.capitalize()}\033[0m -> \033[93m{sfirst_name.capitalize()} {ssurname.capitalize()}\033[0m (similarity score: {score}%)")
                         
                         # Get user input
-                        match = input("(y/n): ")
-                        while match.lower() not in ["y", "n"]:
+                        match = input("(y/n/exit): ")
+                        while match.lower() not in ["y", "n", "exit"]:
                             print("Invalid input")
-                            match = input("(y/n): ")
+                            match = input("(y/n/exit): ")
 
                         if match.lower() == "y":
                             swimmer = qualifiers_table[
@@ -147,6 +147,9 @@ def leahify_qualifiers(
                             manual_matches[(lfirst_name, lsurname)] = (sfirst_name, ssurname)
 
                             break
+                        elif match.lower() == "exit":
+                            # Exit the program
+                            exit()
 
                     if swimmer.empty:
                         raise ValueError(f"No swimmer found: {lfirst_name.capitalize()} {lsurname.capitalize()}")
@@ -162,7 +165,7 @@ def leahify_qualifiers(
 
             # Print in green
             print("\033[92m" +
-                  f"First name: {lfirst_name.capitalize()}, Surname: {lsurname.capitalize()}" +
+                  f"Successfully matched: {lfirst_name.capitalize()} {lsurname.capitalize()}" +
                   "\033[0m")
 
             time = swimmer[event].values[0]
