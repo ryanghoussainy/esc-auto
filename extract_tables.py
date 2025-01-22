@@ -3,7 +3,6 @@ Read the qualifiers excel sheet and store the data.
 '''
 
 import pandas as pd
-import re
 
 
 def extract_tables(
@@ -18,30 +17,6 @@ def extract_tables(
     This is how we identify the start of a new table.
     The end of a table is identified by an empty row.
     '''
-
-    def get_event_name(row_str) -> str:
-        '''
-        Extract the event name from the input string.
-        e.g. "Event  21   Girls 8 & Under 25 SC Meter Breaststroke" -> "25m Breast"
-        '''
-        pattern = r"\b(25|50|100|200)\s*SC\s*Meter\s*(Freestyle|Backstroke|Breaststroke|Butterfly|IM)"
-        match = re.search(pattern, row_str, re.IGNORECASE)
-
-        if match:
-            distance = match.group(1)
-            stroke = match.group(2)
-
-            stroke_map = {
-                "Freestyle": "Free",
-                "Backstroke": "Back",
-                "Breaststroke": "Breast",
-                "Butterfly": "Fly",
-                "IM": "IM"
-            }
-            formatted_stroke = stroke_map[stroke]
-            return f"{distance}m {formatted_stroke}"
-        else:
-            raise ValueError(f"Invalid event name: {row_str}")
 
     def is_header(row: pd.Series) -> bool:
         '''
@@ -66,15 +41,16 @@ def extract_tables(
         # If we are looking for events and the line contains "Event", then extract the event names
         first_cell_str = str(row.iloc[0])
         if get_events and first_cell_str.startswith("Event"):
-            events.append(get_event_name(first_cell_str))
-        # If the row is a header, then start a new table.
-        if is_header(row):
-            # If we have already started a previous table, then save it to the list of tables.
+            events.append(first_cell_str)
+
+            # If we have found the headers, then add the row to the current table.
             if current_table:
                 tables.append(pd.DataFrame(current_table[1:], columns=current_table[0]))
-
-            # Start a new table
             current_table = [row.to_list()]
+            headers_found = False
+        # If the row is a header, then put it at the start of the current table.
+        elif is_header(row):
+            current_table.insert(0, row.to_list())
             headers_found = True
         # If we have found the headers, then add the row to the current table.
         elif headers_found and not row.isnull().all():

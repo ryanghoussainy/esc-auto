@@ -8,6 +8,10 @@ time in Sammy's version and add it to the dictionary.
 from extract_tables import extract_tables, print_tables, concat_tables, print_first_rows
 import pandas as pd
 from fuzzywuzzy import fuzz
+from openpyxl import Workbook
+from openpyxl.styles import Border, Side, Font
+from openpyxl.utils.dataframe import dataframe_to_rows
+import re
 
 
 GROUPS = ["Dolphins", "Herrings", "Seals", "Piranhas", "Marlins"]
@@ -20,10 +24,10 @@ def get_qualifiers_table(file: str, sheet_name: str) -> tuple[pd.DataFrame, list
     '''
     Extract the tables from Sammy's version of the qualifiers.
     '''
-    qualifiers_table, events = extract_tables(file, sheet_name, [
+    qualifiers_table, _ = extract_tables(file, sheet_name, [
         (QUAL_TABLE_ID, 0)
     ])
-    return concat_tables(qualifiers_table), events
+    return concat_tables(qualifiers_table)
 
 
 def get_leah_tables(file: str, sheet_name: str) -> tuple[list[pd.DataFrame], list[str]]:
@@ -46,6 +50,31 @@ def leahify_qualifiers(
     Turn Sammy's version of qualifiers into Leah's version.
     '''
 
+    def get_event_name(row_str) -> str:
+        '''
+        Extract the event name from the input string.
+        e.g. "Event  21   Girls 8 & Under 25 SC Meter Breaststroke" -> "25m Breast"
+        '''
+        pattern = r"\b(25|50|100|200)\s*SC\s*Meter\s*(Freestyle|Backstroke|Breaststroke|Butterfly|IM)"
+        match = re.search(pattern, row_str, re.IGNORECASE)
+
+        if match:
+            distance = match.group(1)
+            stroke = match.group(2)
+
+            stroke_map = {
+                "Freestyle": "Free",
+                "Backstroke": "Back",
+                "Breaststroke": "Breast",
+                "Butterfly": "Fly",
+                "IM": "IM"
+            }
+            formatted_stroke = stroke_map[stroke]
+            return f"{distance}m {formatted_stroke}"
+        else:
+            raise ValueError(f"Invalid event name: {row_str}")
+        
+
     def parse_name(name: str) -> tuple[str, str]:
         '''
         Parse the name into first name and surname.
@@ -65,12 +94,13 @@ def leahify_qualifiers(
     
     # Get all tables from Sammy's version from each sheet and concatenate them
     qualifiers_table = pd.concat([
-        get_qualifiers_table(sfile, group)[0]  # ignore events
+        get_qualifiers_table(sfile, group)
         for group in GROUPS
     ], ignore_index=True)
 
     # Extract tables from Leah's version
-    leah_tables, events = get_leah_tables(lfile, None)
+    leah_tables, full_events = get_leah_tables(lfile, None)
+    events = [get_event_name(event) for event in full_events]
 
     # Keep track of number of successful matches
     num_matches = 0
@@ -82,11 +112,12 @@ def leahify_qualifiers(
     # For each swimmer in Leah's version, find the corresponding time in Sammy's version
     for tableIdx in range(len(leah_tables)):
         # Get the event
+        full_event = full_events[tableIdx]
         event = events[tableIdx]
 
         ltable = leah_tables[tableIdx]
 
-        for _, lrow in ltable.iterrows():
+        for lrowIdx, lrow in ltable.iterrows():
             # Skip NAN rows
             if pd.isnull(lrow["Name"]):
                 continue
@@ -168,23 +199,55 @@ def leahify_qualifiers(
                   f"Successfully matched: {lfirst_name.capitalize()} {lsurname.capitalize()}" +
                   "\033[0m")
 
+            # Get the time
             time = swimmer[event].values[0]
+            
+            # Set the column type to string
+            leah_tables[tableIdx] = leah_tables[tableIdx].astype({"Time": str})
 
-            # Write the time to the table
-            # table.at[_, "Time"] = time
+            # Set the time if it's not nan
+            if not pd.isnull(time):
+                leah_tables[tableIdx].at[lrowIdx, "Time"] = time
+            else:
+                leah_tables[tableIdx].at[lrowIdx, "Time"] = "DNS"
+
 
     print(f"Number of matches: {num_matches} / {total}")
 
-    return leah_tables
+    # Concatenate all tables into a single table, adding a header row for each one
+    ltable = leah_tables[0]
+    output_table = pd.DataFrame(columns=ltable.columns)
+
+    header_row = pd.DataFrame([ltable.columns], columns=ltable.columns)
+
+    for tableIdx in range(len(leah_tables)):
+        # Add the header row
+        ltable = leah_tables[tableIdx]
+        ltable_with_header = pd.concat([ltable.iloc[:1], header_row, ltable.iloc[1:]])  
+        output_table = pd.concat([output_table, ltable_with_header])
+
+    # Get rid of nan values in the Time column
+    output_table["Time"] = output_table["Time"].replace("nan", "")
+
+
+    # Add a border to the table
+    wb = Workbook()
+    ws = wb.active
+    big_font = Font(size=18)
+    for r in dataframe_to_rows(output_table, index=False, header=False):
+        ws.append(r)
+    for row in ws.iter_rows(min_row=1, max_row=len(output_table), min_col=1, max_col=len(output_table.columns)):
+        for cell in row:
+            cell.border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+            if cell.column == 6 and cell.value != "Time":
+                cell.font = big_font
+            
+
+    # Save the workbook
+    wb.save("output.xlsx")
+
 
 if __name__ == '__main__':
-    '''
-    Example usage of the functions.
-    '''
-    # qualifiers_table, events = get_qualifiers_table('examples/1_doc.xlsx', "Dolphins")
-    # print(qualifiers_table)
-    # print(events)
-
-    # leah_tables, events = get_leah_tables('examples/2_docLeah.xls', sheet_name=None)
 
     leahify_qualifiers('examples/1_doc.xlsx', 'examples/2_docLeah.xls')
+    
