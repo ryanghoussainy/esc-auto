@@ -106,8 +106,9 @@ def leahify_qualifiers(
     num_matches = 0
     total = 0
 
-    # Keep track of manual matches
+    # Keep track of manual and automatic matches
     manual_matches = {}
+    automatic_matches = {}
 
     # For each swimmer in Leah's version, find the corresponding time in Sammy's version
     for tableIdx in range(len(leah_tables)):
@@ -132,65 +133,76 @@ def leahify_qualifiers(
             lfirst_names, lsurname = parse_name(lrow["Name"])
             lfirst_name = lfirst_names.split(" ")[0]
 
-            # Get time from Sammy's version by first name and surname
-            # Match with lowercase names
-            swimmer = qualifiers_table[
-                (qualifiers_table["First name"].str.lower() == lfirst_name) &
-                (qualifiers_table["Surname"].str.lower() == lsurname)
-            ]
+            # Check for automatic matches
+            if (lfirst_name, lsurname) in automatic_matches:
+                sfirst_name, ssurname = automatic_matches[(lfirst_name, lsurname)]
+                swimmer = qualifiers_table[
+                    (qualifiers_table["First name"] == sfirst_name) & 
+                    (qualifiers_table["Surname"] == ssurname)
+                ]
+            else:
+                # Get all close matches with fuzzy matching
+                scores = []
+                for _, srow in qualifiers_table.iterrows():
+                    # Skip automatic and manual matches
+                    if (srow["First name"], srow["Surname"]) in automatic_matches.values() or \
+                        (srow["First name"], srow["Surname"]) in manual_matches.values():
+                        continue
+                    
+                    scores.append((srow["First name"], srow["Surname"], fuzz.ratio(lfirst_name + " " + lsurname, srow["First name"].lower() + " " + srow["Surname"].lower())))
+                scores.sort(key=lambda x: x[2], reverse=True)
 
-            if swimmer.empty:
-                # Check if we already have a manual match
-                if (lfirst_name, lsurname) in manual_matches:
-                    sfirst_name, ssurname = manual_matches[(lfirst_name, lsurname)]
-                    swimmer = qualifiers_table[
-                        (qualifiers_table["First name"] == sfirst_name) &
-                        (qualifiers_table["Surname"] == ssurname)
-                    ]
-                else:
-                    print("\033[93m" +
-                          f"Trying to match... {lfirst_name.capitalize()} {lsurname.capitalize()}" +
-                          "\033[0m")
-                    # Get all close matches using fuzzy matching on first name and surname ordered by score
-                    scores = []
-                    for _, srow in qualifiers_table.iterrows():
-                        scores.append((srow["First name"], srow["Surname"], fuzz.ratio(lfirst_name + " " + lsurname, srow["First name"].lower() + " " + srow["Surname"].lower())))
-                    scores.sort(key=lambda x: x[2], reverse=True)
-
-                    # Keep asking the user to say yes or no to each match
-                    for _, (sfirst_name, ssurname, score) in enumerate(scores):
-                        # Ask the user if the match is correct
-                        print(f"Is this the right match? \033[93m{lfirst_name.capitalize()} {lsurname.capitalize()}\033[0m -> \033[93m{sfirst_name.capitalize()} {ssurname.capitalize()}\033[0m (similarity score: {score}%)")
+                # If the first one isn't identical, then ask the user
+                if scores[0][2] < 100:
+                    # Check for manual matches
+                    if (lfirst_name, lsurname) in manual_matches:
+                        sfirst_name, ssurname = manual_matches[(lfirst_name, lsurname)]
+                        swimmer = qualifiers_table[
+                            (qualifiers_table["First name"] == sfirst_name) &
+                            (qualifiers_table["Surname"] == ssurname)
+                        ]
+                    else:
+                        print("\033[93m" +
+                            f"Trying to match... {lfirst_name.capitalize()} {lsurname.capitalize()}" +
+                            "\033[0m")
                         
-                        # Get user input
-                        match = input("(y/n/exit): ")
-                        while match.lower() not in ["y", "n", "exit"]:
-                            print("Invalid input")
+                        # Keep asking the user to say yes or no to each match
+                        for _, (sfirst_name, ssurname, score) in enumerate(scores):
+                            # Ask the user if the match is correct
+                            print(f"Is this the right match? \033[93m{lfirst_name.capitalize()} {lsurname.capitalize()}\033[0m -> \033[93m{sfirst_name.capitalize()} {ssurname.capitalize()}\033[0m (similarity score: {score}%)")
+                            
+                            # Get user input
                             match = input("(y/n/exit): ")
+                            while match.lower() not in ["y", "n", "exit"]:
+                                print("Invalid input")
+                                match = input("(y/n/exit): ")
 
-                        if match.lower() == "y":
-                            swimmer = qualifiers_table[
-                                (qualifiers_table["First name"] == sfirst_name) &
-                                (qualifiers_table["Surname"] == ssurname)
-                            ]
+                            if match.lower() == "y":
+                                swimmer = qualifiers_table[
+                                    (qualifiers_table["First name"] == sfirst_name) &
+                                    (qualifiers_table["Surname"] == ssurname)
+                                ]
 
-                            # Add to manual matches
-                            manual_matches[(lfirst_name, lsurname)] = (sfirst_name, ssurname)
+                                # Add to manual matches
+                                manual_matches[(lfirst_name, lsurname)] = (sfirst_name, ssurname)
 
-                            break
-                        elif match.lower() == "exit":
-                            # Exit the program
-                            exit()
+                                break
+                            elif match.lower() == "exit":
+                                # Exit the program
+                                exit()
 
-                    if swimmer.empty:
-                        raise ValueError(f"No swimmer found: {lfirst_name.capitalize()} {lsurname.capitalize()}")
-                
-            elif len(swimmer) > 1:
-                print("\033[91m" +
-                      f"Multiple swimmers found: {lfirst_name.capitalize()} {lsurname.capitalize()}" +
-                      "\033[0m")
-                continue
+                        if swimmer.empty:
+                            raise ValueError(f"No swimmer found: {lfirst_name.capitalize()} {lsurname.capitalize()}")
+                    
+                else:
+                    swimmer = qualifiers_table[
+                        (qualifiers_table["First name"] == scores[0][0]) &
+                        (qualifiers_table["Surname"] == scores[0][1])
+                    ]
 
+                    # Add to automatic matches
+                    automatic_matches[(lfirst_name, lsurname)] = (scores[0][0], scores[0][1])
+            
             # Increment number of matches
             num_matches += 1
 
@@ -198,19 +210,18 @@ def leahify_qualifiers(
             print("\033[92m" +
                   f"Successfully matched: {lfirst_name.capitalize()} {lsurname.capitalize()}" +
                   "\033[0m")
-
+            
             # Get the time
             time = swimmer[event].values[0]
-            
+
             # Set the column type to string
             leah_tables[tableIdx] = leah_tables[tableIdx].astype({"Time": str})
-
+            
             # Set the time if it's not nan
             if not pd.isnull(time):
                 leah_tables[tableIdx].at[lrowIdx, "Time"] = time
             else:
                 leah_tables[tableIdx].at[lrowIdx, "Time"] = "DNS"
-
 
     print(f"Number of matches: {num_matches} / {total}")
 
@@ -223,12 +234,11 @@ def leahify_qualifiers(
     for tableIdx in range(len(leah_tables)):
         # Add the header row
         ltable = leah_tables[tableIdx]
-        ltable_with_header = pd.concat([ltable.iloc[:1], header_row, ltable.iloc[1:]])  
+        ltable_with_header = pd.concat([ltable.iloc[:1], header_row, ltable.iloc[1:]])
         output_table = pd.concat([output_table, ltable_with_header])
 
     # Get rid of nan values in the Time column
     output_table["Time"] = output_table["Time"].replace("nan", "")
-
 
     # Add a border to the table
     wb = Workbook()
@@ -241,10 +251,20 @@ def leahify_qualifiers(
             cell.border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
             if cell.column == 6 and cell.value != "Time":
                 cell.font = big_font
-            
 
     # Save the workbook
     wb.save("output.xlsx")
+
+    # Create an extras excel for all unmatched swimmers in Sammy's version
+    extras = qualifiers_table[
+        ~qualifiers_table.apply(lambda row: (row["First name"], row["Surname"]) in automatic_matches.values() or (row["First name"], row["Surname"]) in manual_matches.values(), axis=1)
+    ]
+
+    # Ignore rows where all events are empty
+    extras = extras[~extras[events].isnull().all(axis=1)]
+
+    # Save the extras
+    extras.to_excel("extras.xlsx", index=False)
 
 
 if __name__ == '__main__':
