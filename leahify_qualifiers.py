@@ -110,6 +110,10 @@ def leahify_qualifiers(
     manual_matches = {}
     automatic_matches = {}
 
+    # Keep track of which events have been matched.
+    # This is for the extras table (i.e. which swimmers swam but did not sign up)
+    matched_events = {}  # Map from swimmer name (sammy's version) to a list of events
+
     # For each swimmer in Leah's version, find the corresponding time in Sammy's version
     for tableIdx in range(len(leah_tables)):
         # Get the event
@@ -206,6 +210,14 @@ def leahify_qualifiers(
             # Increment number of matches
             num_matches += 1
 
+            # Add the event to the matched events
+            sfirst_name = swimmer["First name"].values[0]
+            ssurname = swimmer["Surname"].values[0]
+            if (sfirst_name, ssurname) in matched_events:
+                matched_events[(sfirst_name, ssurname)].append(event)
+            else:
+                matched_events[(sfirst_name, ssurname)] = [event]
+
             # Print in green
             print("\033[92m" +
                   f"Successfully matched: {lfirst_name.capitalize()} {lsurname.capitalize()}" +
@@ -252,16 +264,42 @@ def leahify_qualifiers(
             if cell.column == 6 and cell.value != "Time":
                 cell.font = big_font
 
-    # Save the workbook
+    # Save the output table
     wb.save("output.xlsx")
 
-    # Create an extras excel for all unmatched swimmers in Sammy's version
-    extras = qualifiers_table[
-        ~qualifiers_table.apply(lambda row: (row["First name"], row["Surname"]) in automatic_matches.values() or (row["First name"], row["Surname"]) in manual_matches.values(), axis=1)
-    ]
+    # Initialise the extras table as empty
+    extras = pd.DataFrame(columns=qualifiers_table.columns)
 
-    # Ignore rows where all events are empty
-    extras = extras[~extras[events].isnull().all(axis=1)]
+    print(matched_events)
+
+    for _, srow in qualifiers_table.iterrows():
+        # Get all events swam by the swimmer
+        events_swam = set(event for event in set(events) if not pd.isnull(srow[event]) and srow[event] != "DNS")
+
+        # Remove the 200m Free since we only care about the normal events
+        if "200m Free" in events_swam:
+            events_swam.remove("200m Free")
+
+        if (srow["First name"] == "Alexander" and srow["Surname"] == "Javitz"):
+            print(set(events))
+            print(events_swam)
+
+        # Missing events
+        missing_events = []
+
+        # Check if they have been matched for the same events
+        for ev in events_swam:
+            if (srow["First name"], srow["Surname"]) not in matched_events or ev not in matched_events[(srow["First name"], srow["Surname"])]:
+                missing_events.append(ev)
+
+        # Add the swimmer as one row, but only with the missing events
+        if missing_events:
+            # print name and missing event
+            print(f"{srow['First name']} {srow['Surname']}: {missing_events}")
+            # only take the missing events from srow
+            missing_events_row = srow[["First name", "Surname"] + missing_events]
+            # Add the swimmer to the extras table
+            extras = pd.concat([extras, missing_events_row.to_frame().T])
 
     # Save the extras
     extras.to_excel("extras.xlsx", index=False)
