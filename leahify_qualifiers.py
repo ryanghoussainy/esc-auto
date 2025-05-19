@@ -297,7 +297,7 @@ def leahify_qualifiers(
             # print name and missing event
             print(f"{srow['First name']} {srow['Surname']}: {missing_events}")
             # only take the missing events from srow
-            missing_events_row = srow[["First name", "Surname"] + missing_events]
+            missing_events_row = srow[["First name", "Surname", "ASA", "DOB", "Group"] + missing_events]
             # Add the swimmer to the extras table
             extras = pd.concat([extras, missing_events_row.to_frame().T])
 
