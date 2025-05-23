@@ -9,7 +9,7 @@ from extract_tables import extract_tables, print_tables, concat_tables, print_fi
 import pandas as pd
 from fuzzywuzzy import fuzz
 from openpyxl import Workbook
-from openpyxl.styles import Border, Side, Font
+from openpyxl.styles import Border, Side, Font, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 import re
 
@@ -24,10 +24,10 @@ def get_qualifiers_table(file: str, sheet_name: str) -> tuple[pd.DataFrame, list
     '''
     Extract the tables from Sammy's version of the qualifiers.
     '''
-    qualifiers_table, _ = extract_tables(file, sheet_name, [
+    qualifiers_table, _, s_info = extract_tables(file, sheet_name, [
         (QUAL_TABLE_ID, 0)
     ])
-    return concat_tables(qualifiers_table)
+    return concat_tables(qualifiers_table), s_info
 
 
 def get_leah_tables(file: str, sheet_name: str) -> tuple[list[pd.DataFrame], list[str]]:
@@ -91,15 +91,22 @@ def leahify_qualifiers(
             return first_name, surname
         else:
             raise ValueError(f"Invalid name: {name}")
-    
+        
+    # Keep "global" lists for genders
+    swimmer_info = {}
+
     # Get all tables from Sammy's version from each sheet and concatenate them
-    qualifiers_table = pd.concat([
-        get_qualifiers_table(sfile, group)
-        for group in GROUPS
-    ], ignore_index=True)
+    qualifiers_tables = []
+    for group in GROUPS:
+        qualifiers_table, s_info = get_qualifiers_table(sfile, group)
+        qualifiers_tables.append(qualifiers_table)
+
+        # Add the swimmer info to the global dictionary
+        swimmer_info.update(s_info)
+    qualifiers_table = pd.concat(qualifiers_tables, ignore_index=True)
 
     # Extract tables from Leah's version
-    leah_tables, full_events = get_leah_tables(lfile, None)
+    leah_tables, full_events, _ = get_leah_tables(lfile, None)
     events = [get_event_name(event) for event in full_events]
 
     # Keep track of number of successful matches
@@ -252,37 +259,16 @@ def leahify_qualifiers(
     # Get rid of nan values in the Time column
     output_table["Time"] = output_table["Time"].replace("nan", "")
 
-    # Add a border to the table
-    wb = Workbook()
-    ws = wb.active
-    big_font = Font(size=18)
-    for r in dataframe_to_rows(output_table, index=False, header=False):
-        ws.append(r)
-    for row in ws.iter_rows(min_row=1, max_row=len(output_table), min_col=1, max_col=len(output_table.columns)):
-        for cell in row:
-            cell.border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
-            if cell.column == 6 and cell.value != "Time":
-                cell.font = big_font
+    # Keep track of extra swimmers for each event
+    extras_per_event = {} # Map from (event name, age range, gender) to a list of swimmers
 
-    # Save the output table
-    wb.save("output.xlsx")
-
-    # Initialise the extras table as empty
-    extras = pd.DataFrame(columns=qualifiers_table.columns)
-
-    print(matched_events)
-
-    for _, srow in qualifiers_table.iterrows():
+    for idx, srow in qualifiers_table.iterrows():
         # Get all events swam by the swimmer
         events_swam = set(event for event in set(events) if not pd.isnull(srow[event]) and srow[event] != "DNS")
 
         # Remove the 200m Free since we only care about the normal events
         if "200m Free" in events_swam:
             events_swam.remove("200m Free")
-
-        if (srow["First name"] == "Alexander" and srow["Surname"] == "Javitz"):
-            print(set(events))
-            print(events_swam)
 
         # Missing events
         missing_events = []
@@ -292,20 +278,81 @@ def leahify_qualifiers(
             if (srow["First name"], srow["Surname"]) not in matched_events or ev not in matched_events[(srow["First name"], srow["Surname"])]:
                 missing_events.append(ev)
 
-        # Add the swimmer as one row, but only with the missing events
-        if missing_events:
-            # print name and missing event
-            print(f"{srow['First name']} {srow['Surname']}: {missing_events}")
-            # only take the missing events from srow
-            missing_events_row = srow[["First name", "Surname", "ASA", "DOB", "Group"] + missing_events]
-            # Add the swimmer to the extras table
-            extras = pd.concat([extras, missing_events_row.to_frame().T])
+        # Add the swimmer to the extras per event
+        for missing_event in missing_events:
+            # Get swimmer age range and gender
+            age_from, age_to, gender = swimmer_info[(srow["First name"], srow["Surname"])]
+            # Add the swimmer to the extras per event table
+            extras_per_event.setdefault((missing_event, age_from, age_to, gender), []).append(srow)
 
-    # Save the extras
-    extras.to_excel("extras.xlsx", index=False)
+    # Instead of modifying output_table in-place, build a new list of rows
+    new_rows = []
+    prv_event = prv_age_from = prv_age_to = prv_gender = None
+
+    for idx, row in output_table.iterrows():
+        # Insert extras for the previous event before the next event header
+        if row.iloc[0].startswith("Event"):
+            if prv_event is not None:
+                key = (prv_event, prv_age_from, prv_age_to, prv_gender)
+                if key in extras_per_event:
+                    # Insert a label row
+                    new_rows.append(["EXTRA"] + [""] * (output_table.shape[1] - 1))
+                    # Insert each extra swimmer row (convert Series to list)
+                    for extra_row in extras_per_event[key]:
+                        new_rows.append(extra_row[["First name", "Surname", "ASA", "DOB", "Group", prv_event]].tolist() + [""] * (output_table.shape[1] - 6))
+
+            # Extract the event name
+            prv_event = get_event_name(row.iloc[0])
+            # Extract the age range
+            age_range = re.search(r"\b\d{1,2}\s*&\s*(Under|Over|under|over)|\b\d{1,2}\s*-\s*\d{1,2}", row.iloc[0])
+            if age_range:
+                age_range = age_range.group(0)
+                if "under" in age_range.lower():
+                    prv_age_from = 0
+                    prv_age_to = int(age_range.split("&")[0].strip())
+                elif "over" in age_range.lower():
+                    prv_age_from = int(age_range.split("&")[0].strip())
+                    prv_age_to = 99
+                else:
+                    if "-" in age_range:
+                        prv_age_from, prv_age_to = map(int, age_range.split("-"))
+                    elif "/" in age_range:
+                        prv_age_from, prv_age_to = map(int, age_range.split("/"))
+                    else:
+                        raise ValueError(f"Could not extract age range. Did not find - or /: {row.iloc[0]}")
+            elif "200" in row.iloc[0]:
+                pass
+            else:
+                raise ValueError(f"Could not extract age range from event name: {row.iloc[0]}")
+
+            prv_gender = "boys" if "boys" in row.iloc[0].lower() else "girls"
+
+        # Always add the current row
+        new_rows.append(list(row))
+
+    # Rebuild the output_table from new_rows
+    output_table = pd.DataFrame(new_rows, columns=output_table.columns)
+
+    # Add a border to the table
+    wb = Workbook()
+    ws = wb.active
+    big_font = Font(size=18)
+    yellow_fill = PatternFill(start_color="FFFF00", end_color="FFFF00", fill_type="solid")
+    for r in dataframe_to_rows(output_table, index=False, header=False):
+        ws.append(r)
+    for row in ws.iter_rows(min_row=1, max_row=len(output_table), min_col=1, max_col=len(output_table.columns)):
+        for cell in row:
+            cell.border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
+            if cell.column == 6 and cell.value != "Time":
+                cell.font = big_font
+            if cell.row > 1 and cell.column == 1 and cell.value == "EXTRA":
+                cell.fill = yellow_fill
+
+    # Save the output table
+    wb.save("output.xlsx")
 
 
 if __name__ == '__main__':
 
     leahify_qualifiers('examples/1_doc.xlsx', 'examples/2_docLeah.xls')
-    
+

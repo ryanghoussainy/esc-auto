@@ -3,6 +3,7 @@ Read the qualifiers excel sheet and store the data.
 '''
 
 import pandas as pd
+import re
 
 
 def extract_tables(
@@ -10,7 +11,7 @@ def extract_tables(
         sheet_name: str,
         header_identifiers: list[(str, int)],
         get_events: bool = False,
-) -> tuple[list[pd.DataFrame], list[str]]:
+) -> tuple[list[pd.DataFrame], list[str], dict[str, (int, int, str)]]:
     '''
     Extracts all tables from the given excel sheet.
     Each table must have a row where the first cell contains "first" and "name".
@@ -34,10 +35,16 @@ def extract_tables(
     tables: list[pd.DataFrame] = []  # To store individual tables
     current_table = []  # Temporary storage for the current table
     events = []  # To store the event names
+
+    swimmer_info = {} # To store swimmer info
+    current_gender = None
+    current_age_from = None
+    current_age_to = None
+
     headers_found = False
 
     # Iterate through each row
-    for _, row in df.iterrows():
+    for idx, row in df.iterrows():
         # If we are looking for events and the line contains "Event", then extract the event names
         first_cell_str = str(row.iloc[0])
         if get_events and first_cell_str.startswith("Event"):
@@ -52,9 +59,47 @@ def extract_tables(
         elif is_header(row):
             current_table.insert(0, row.to_list())
             headers_found = True
-        # If we have found the headers, then add the row to the current table.
+
+            if idx > 0:
+                # Look at the row above to extract the gender
+                cell = df.iloc[idx - 1][0]
+                if "boys" in str(cell).lower():
+                    current_gender = "boys"
+                elif "girls" in str(cell).lower():
+                    current_gender = "girls"
+                else:
+                    raise ValueError(f"Could not extract gender \"boys\" or \"girls\": {cell}")
+                
+                # Extract the age range from the row above
+                age_range = re.search(r"\b\d{1,2}\s*&\s*(Under|Over|under|over)|\b\d{1,2}\s*(-|/)\s*\d{1,2}", cell)
+                if age_range:
+                    age_range = age_range.group(0)
+                    if "under" in age_range.lower():
+                        current_age_from = 0
+                        current_age_to = int(age_range.split("&")[0].strip())
+                    elif "over" in age_range.lower():
+                        current_age_from = int(age_range.split("&")[0].strip())
+                        current_age_to = 99
+                    else:
+                        if "-" in age_range:
+                            current_age_from, current_age_to = map(int, age_range.split("-"))
+                        elif "/" in age_range:
+                            current_age_from, current_age_to = map(int, age_range.split("/"))
+                        else:
+                            raise ValueError(f"Could not extract age range. Did not find - or /: {cell}")
+                # Ignore 200m freestyle
+                elif "200" in cell:
+                    pass
+                else:
+                    raise ValueError(f"Could not extract age range: {cell}")
+                
+        # If we have found the headers, then add the swimmer row to the current table.
         elif headers_found and not row.isnull().all():
             current_table.append(row.to_list())
+            # Also add it to the current gender set
+            first_name, surname = row[0], row[1]
+            swimmer_info[(first_name, surname)] = (current_age_from, current_age_to, current_gender)
+
         # If the row is empty, then we have reached the end of the table.
         elif row.isnull().all() and current_table:
             tables.append(pd.DataFrame(current_table[1:], columns=current_table[0]))
@@ -69,7 +114,7 @@ def extract_tables(
     # Filter out empty tables
     tables = [table for table in tables if not table.empty]
 
-    return tables, events
+    return tables, events, swimmer_info
 
 
 def concat_tables(tables: list[pd.DataFrame]) -> pd.DataFrame:
