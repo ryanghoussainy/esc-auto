@@ -5,6 +5,8 @@ Read the qualifiers excel sheet and store the data.
 import pandas as pd
 import re
 
+REGEX_AGE_RANGE_SAMMY = r"\b\d{1,2}\s*&\s*(Under|Over|under|over)|\b\d{1,2}\s*(-|/)\s*\d{1,2}"
+
 
 def extract_tables(
         file: str,
@@ -36,7 +38,7 @@ def extract_tables(
     current_table = []  # Temporary storage for the current table
     events = []  # To store the event names
 
-    swimmer_info = {} # To store swimmer info
+    swimmer_info = {} # To store swimmer info (age from, age to, gender)
     current_gender = None
     current_age_from = None
     current_age_to = None
@@ -71,7 +73,7 @@ def extract_tables(
                     raise ValueError(f"Could not extract gender \"boys\" or \"girls\": {cell}")
                 
                 # Extract the age range from the row above
-                age_range = re.search(r"\b\d{1,2}\s*&\s*(Under|Over|under|over)|\b\d{1,2}\s*(-|/)\s*\d{1,2}", cell)
+                age_range = re.search(REGEX_AGE_RANGE_SAMMY, cell)
                 if age_range:
                     age_range = age_range.group(0)
                     if "under" in age_range.lower():
