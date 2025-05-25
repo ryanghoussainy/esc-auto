@@ -324,67 +324,66 @@ def get_extras_per_event(
 
     return extras_per_event
 
-def add_extras_to_output_table(
-    output_table: pd.DataFrame,
+def add_extras_to_leah_tables(
+    leah_tables: list[pd.DataFrame],
+    events: list[str],
     extras_per_event: dict,
-) -> pd.DataFrame:
-    # Instead of modifying output_table in-place, build a new list of rows
-    new_rows = []
+) -> list[pd.DataFrame]:
+    """
+    Insert extras into each Leah table before combining.
+    """
     
-    # Keep track of the previous event and age range
-    prv_event = prv_age_from = prv_age_to = prv_gender = None
+    for i in range(len(leah_tables)):
+        leah_table = leah_tables[i]
+        event_cell = leah_table.iloc[0, 0]
 
-    for idx, row in output_table.iterrows():
-        # Insert extras for the previous event before the next event header
-        if row.iloc[0].startswith("Event"):
-            if prv_event is not None:
-                key = (prv_event, prv_age_from, prv_age_to, prv_gender)
-                if key in extras_per_event:
-                    # Insert a label row
-                    new_rows.append(["EXTRA"] + [""] * (output_table.shape[1] - 1))
-                    # Insert each extra swimmer row (convert Series to list)
-                    for extra_row in extras_per_event[key]:
-                        new_rows.append(extra_row[["First name", "Surname", "ASA", "DOB", "Group", prv_event]].tolist() + [""] * (output_table.shape[1] - 6))
+        # Extract event name
+        event_name = get_event_name(event_cell)
 
-            # Extract the event name
-            prv_event = get_event_name(row.iloc[0])
-            # Extract the age range
-            age_range = re.search(REGEX_AGE_RANGE_LEAH, row.iloc[0])
-            if age_range:
-                age_range = age_range.group(0)
-                if "under" in age_range.lower():
-                    prv_age_from = 0
-                    prv_age_to = int(age_range.split("&")[0].strip())
-                elif "over" in age_range.lower():
-                    prv_age_from = int(age_range.split("&")[0].strip())
-                    prv_age_to = 99
-                else:
-                    if "-" in age_range:
-                        prv_age_from, prv_age_to = map(int, age_range.split("-"))
-                    elif "/" in age_range:
-                        prv_age_from, prv_age_to = map(int, age_range.split("/"))
-                    else:
-                        raise ValueError(f"Could not extract age range. Did not find - or /: {row.iloc[0]}")
-            elif "200" in row.iloc[0]:
-                pass
+        # Extract age range
+        age_range = re.search(REGEX_AGE_RANGE_LEAH, event_cell)
+        if age_range:
+            age_range = age_range.group(0)
+            if "under" in age_range.lower():
+                age_from = 0
+                age_to = int(age_range.split("&")[0].strip())
+            elif "over" in age_range.lower():
+                age_from = int(age_range.split("&")[0].strip())
+                age_to = 99
             else:
-                raise ValueError(f"Could not extract age range from event name: {row.iloc[0]}")
+                if "-" in age_range:
+                    age_from, age_to = map(int, age_range.split("-"))
+                elif "/" in age_range:
+                    age_from, age_to = map(int, age_range.split("/"))
+                else:
+                    raise ValueError(f"Could not extract age range. Did not find - or /: {event_cell}")
+        elif "200" in event_cell:
+            pass
+        else:
+            raise ValueError(f"Could not extract age range from event name: {event_cell}")
 
-            prv_gender = "boys" if "boys" in row.iloc[0].lower() else "girls"
+        gender = "boys" if "boys" in event_cell.lower() else "girls"
+        key = (event_name, age_from, age_to, gender)
 
-        # Always add the current row
-        new_rows.append(list(row))
-
-    # After the last row, check for extras for the last event
-    if prv_event is not None:
-        key = (prv_event, prv_age_from, prv_age_to, prv_gender)
+        # If extras_per_event has an entry, add extras to the table
         if key in extras_per_event:
-            new_rows.append(["EXTRA"] + [""] * (output_table.shape[1] - 1))
-            for extra_row in extras_per_event[key]:
-                new_rows.append(extra_row[["First name", "Surname", "ASA", "DOB", "Group", prv_event]].tolist() + [""] * (output_table.shape[1] - 6))
+            # Add extra label row
+            extra_label_row = pd.DataFrame([["EXTRA"] + [""] * (len(leah_table.columns) - 1)], columns=leah_table.columns)
+            leah_tables[i] = pd.concat([leah_tables[i], extra_label_row], ignore_index=True)
 
-    # Rebuild the output_table from new_rows
-    return pd.DataFrame(new_rows, columns=output_table.columns)
+            # For each extra swimmer, create a row
+            for extra_row in extras_per_event[key]:
+                # Add the correct columns to insert into Leah table
+                extra_row = extra_row[["First name", "Surname", "ASA", "DOB", "Group", event_name]]
+                
+                # Pad the row with empty strings to match the number of columns in leah_table
+                padded_row = list(extra_row.values) + [""] * (len(leah_table.columns) - len(extra_row.values))
+                extra_row_df = pd.DataFrame([padded_row], columns=leah_table.columns)
+
+                # Add it to the Leah table
+                leah_tables[i] = pd.concat([leah_tables[i], extra_row_df], ignore_index=True)
+
+    return leah_tables
 
 def save_output_table_to_excel(
         output_table: pd.DataFrame,
@@ -430,14 +429,14 @@ def leahify_qualifiers(
     # For each swimmer in Leah's version, find the corresponding time in Sammy's version
     matched_events = match_swimmers(qualifiers_table, leah_tables, events)
 
-    # Concatenate all tables into a single table, adding a header row for each one
-    output_table = combine_tables(leah_tables)
-
     # Get extra swimmers per event
     extras_per_event = get_extras_per_event(qualifiers_table, events, swimmer_info, matched_events)
 
-    # Rebuild the output table with extras
-    output_table = add_extras_to_output_table(output_table, extras_per_event)
+    # Insert extras into each Leah table before combining
+    leah_tables_with_extras = add_extras_to_leah_tables(leah_tables, events, extras_per_event)
+
+    # Combine all tables into a single output table
+    output_table = combine_tables(leah_tables_with_extras)
 
     # Save the output table to an Excel file
     save_output_table_to_excel(output_table, "output.xlsx")
