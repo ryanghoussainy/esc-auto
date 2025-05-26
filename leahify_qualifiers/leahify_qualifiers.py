@@ -48,8 +48,7 @@ def get_event_name(row_str) -> str:
         formatted_stroke = stroke_map[stroke]
         return f"{distance}m {formatted_stroke}"
     else:
-        raise ValueError(f"Invalid event name: {row_str}")
-        
+        raise ValueError(f"Invalid event name: {row_str}")    
 
 def parse_name(name: str) -> tuple[str, str]:
     '''
@@ -76,7 +75,6 @@ def get_qualifiers_table(file: str, sheet_name: str) -> tuple[pd.DataFrame, list
         (QUAL_TABLE_ID, 0)
     ])
     return concat_tables(qualifiers_table), s_info
-
 
 def get_leah_tables(file: str, sheet_name: str) -> tuple[list[pd.DataFrame], list[str]]:
     '''
@@ -129,7 +127,7 @@ def match_swimmers(
         qualifiers_table: pd.DataFrame,
         leah_tables: list[pd.DataFrame],
         events: list[str],
-        ) -> dict:
+) -> dict:
     '''
     Match swimmers from Leah's version to Sammy's version.
     '''
@@ -326,7 +324,6 @@ def get_extras_per_event(
 
 def add_extras_to_leah_tables(
     leah_tables: list[pd.DataFrame],
-    events: list[str],
     extras_per_event: dict,
 ) -> list[pd.DataFrame]:
     """
@@ -414,7 +411,7 @@ def save_output_table_to_excel(
 def leahify_qualifiers(
         sfile: str,
         lfile: str,
-) -> list[dict]:
+) -> None:
     '''
     Turn Sammy's version of qualifiers into Leah's version.
     '''
@@ -433,7 +430,7 @@ def leahify_qualifiers(
     extras_per_event = get_extras_per_event(qualifiers_table, events, swimmer_info, matched_events)
 
     # Insert extras into each Leah table before combining
-    leah_tables_with_extras = add_extras_to_leah_tables(leah_tables, events, extras_per_event)
+    leah_tables_with_extras = add_extras_to_leah_tables(leah_tables, extras_per_event)
 
     # Combine all tables into a single output table
     output_table = combine_tables(leah_tables_with_extras)
