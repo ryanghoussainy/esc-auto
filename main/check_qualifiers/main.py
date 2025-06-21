@@ -1,92 +1,10 @@
 from pypdf import PdfReader
 import pandas as pd
-from leahify_qualifiers import get_leah_tables, match_swimmer, get_event_name, parse_name
-from leahify_qualifiers import print_colour, YELLOW, RED, GREEN
-import re
+from leahify_qualifiers import get_leah_tables
+from reusables import print_discrepancies, TIME_DISCREPANCY, SEED_TIME_DISCREPANCY, SWIMMER_NOT_FOUND_DISCREPANCY
+from reusables import match_swimmer, get_event_name, parse_name, parse_swimmer, normalise_time
 
 
-KEYWORDS = ['NT', 'NS', 'DQ']
-
-TIME_DISCREPANCY = 0
-SEED_TIME_DISCREPANCY = 1
-SWIMMER_NOT_FOUND_DISCREPANCY = 2
-
-
-# Check for dots because times are stored in 'xx:xx.xx' or 'xx.xx' format
-def is_time(s):
-    return re.match(r'^\d{1,2}[:.]\d{2}([:.]\d{2})?$', s) is not None or re.match(r'^\d{1,2}[:.]\d{2}$', s) is not None
-
-def normalise_time(t):
-    return str(t).replace(':', '.').replace(',', '.')
-
-
-def contains_digit(x):
-    return any(c.isdigit() for c in x)
-
-
-def extract_keyword(x):
-    for kw in KEYWORDS:
-        if kw in x:
-            return kw
-    return None
-
-def parse_swimmer(line):
-    """
-    Takes a string of this form "Esc 107 LastNames, FirstName MiddleNameInitials 56.30  NT".
-    Returns a tuple of (Name, Seed Time, Time).
-    The name is in the format "LastNames, FirstName"
-    """
-    # Split by spaces or commas
-    tokens = re.split(r' |,', line.strip())
-    
-    # Skip "Esc"
-    if tokens[0] == "Esc":
-        tokens.pop(0)
-    else:
-        raise ValueError(f"Line does not start with 'Esc'\n{line}")
-    
-    # Skip all ' ' tokens and numbers until we hit a name
-    while tokens and (tokens[0] == '' or contains_digit(tokens[0])):
-        tokens.pop(0)
-    
-    # Extract last names until we hit ' ' token (meaning we hit the comma)
-    last_names = []
-    while tokens and tokens[0] != '':
-        last_names.append(tokens.pop(0))
-    
-    if not last_names:
-        raise ValueError("No last names found in line")
-    
-    # Extract first name (and possibly middle name or initials) until we hit a time or keyword
-    first_name = []
-    while tokens and not is_time(tokens[0]) and extract_keyword(tokens[0]) is None:
-        first_name.append(tokens.pop(0))
-    
-    if not first_name:
-        raise ValueError("No first name found in line")
-    
-    # Join last names and first name
-    name = f"{' '.join(last_names)},{' '.join(first_name)}"
-
-    # Now we should have a time or keyword left
-    if not tokens:
-        raise ValueError("No time or keyword found in line")
-    
-    # Extract the achieved time
-    if not tokens or (not is_time(tokens[0]) and extract_keyword(tokens[0]) is None):
-        raise ValueError("Expected a time or keyword after seed time")
-    achieved_time = tokens.pop(0)
-    
-    # Skip space if it exists
-    if tokens and tokens[0] == '':
-        tokens.pop(0)
-
-    # Extract the seed time
-    if not tokens or (not is_time(tokens[0]) and extract_keyword(tokens[0]) is None):
-        raise ValueError("Expected a time or keyword after name")
-    seed_time = tokens.pop(0)
-
-    return name, seed_time, achieved_time
 
 def clean_name(name):
     """
@@ -272,25 +190,4 @@ def check_qualifiers(output_table_path, pdf_path):
             raise Exception(f"Some swimmers were not matched in the PDF table for event {event_name}. This is likely due to a mismatch in the swimmer's name or time. Please check the PDF results and the Leah output table.")
 
     # Print discrepancies
-    if discrepancies:
-        
-        print("Finished checking qualifiers. Mismatches found:")
-        for d in discrepancies:
-            print("- ", end='')
-            # Print type of mismatch in red
-            if d[0] == TIME_DISCREPANCY:
-                print_colour(RED, "Time mismatch ", end='')
-                print("for ", end='')
-                print_colour(YELLOW, d[1], end=' - ')
-                print(f"Event: {d[2]}, ", end='')
-                print(f"PDF: {d[3]}, LEAH: {d[4]}")
-            elif d[0] == SEED_TIME_DISCREPANCY:
-                print_colour(RED, "Seed time mismatch ", end='')
-                print("for ", end='')
-                print_colour(YELLOW, d[1], end=' - ')
-                print(f"Event: {d[2]}, ", end='')
-                print(f"PDF: {d[3]}, LEAH: {d[4]}")
-            elif d[0] == SWIMMER_NOT_FOUND_DISCREPANCY:
-                print_colour(RED, f"Swimmer {d[1]} not found in PDF")
-    else:
-        print_colour(GREEN, "Finished checking qualifiers. No mismatches found.")
+    print_discrepancies(discrepancies, isQualifiers=True)

@@ -1,7 +1,7 @@
 import pandas as pd
 from pypdf import PdfReader
-from check_qualifiers import parse_swimmer, normalise_time, TIME_DISCREPANCY, SEED_TIME_DISCREPANCY, SWIMMER_NOT_FOUND_DISCREPANCY
-from leahify_qualifiers import match_swimmer, print_colour, parse_name, YELLOW, RED, GREEN
+from reusables import print_discrepancies, TIME_DISCREPANCY, SEED_TIME_DISCREPANCY, SWIMMER_NOT_FOUND_DISCREPANCY
+from reusables import match_swimmer, parse_name, parse_swimmer, normalise_time
 
 def get_finals_tables(finals_file):
     """
@@ -170,25 +170,4 @@ def check_finals(finals_file, pdf_file):
                 discrepancies.append((SWIMMER_NOT_FOUND_DISCREPANCY, pdf_name, event_name, pdf_finals_time, ""))
 
     # Print discrepancies
-    if discrepancies:
-        
-        print("Finished checking qualifiers. Mismatches found:")
-        for d in discrepancies:
-            print("- ", end='')
-            # Print type of mismatch in red
-            if d[0] == TIME_DISCREPANCY:
-                print_colour(RED, "Time mismatch ", end='')
-                print("for ", end='')
-                print_colour(YELLOW, d[1], end=' - ')
-                print(f"Event: {d[2]}, ", end='')
-                print(f"PDF: {d[3]}, FINALS: {d[4]}")
-            elif d[0] == SEED_TIME_DISCREPANCY:
-                print_colour(RED, "Seed time mismatch ", end='')
-                print("for ", end='')
-                print_colour(YELLOW, d[1], end=' - ')
-                print(f"Event: {d[2]}, ", end='')
-                print(f"PDF: {d[3]}, FINALS: {d[4]}")
-            elif d[0] == SWIMMER_NOT_FOUND_DISCREPANCY:
-                print_colour(RED, f"Swimmer {d[1]} not found in PDF")
-    else:
-        print_colour(GREEN, "Finished checking qualifiers. No mismatches found.")
+    print_discrepancies(discrepancies, isQualifiers=False)
