@@ -1,5 +1,6 @@
 from leahify_qualifiers import leahify_qualifiers
 from check_qualifiers import check_qualifiers
+from check_finals import check_finals
 import sys
 
 def main():
@@ -13,8 +14,7 @@ def main():
     elif input == 2:
         check_qualifiers("output.xlsx", "examples/3_docHeatResults.pdf")
     elif input == 3:
-        # TODO
-        pass
+        check_finals("examples/4_docFinalResultsLeah.xlsx", "examples/5_docFullResults.pdf")
     else:
         print("Invalid input. Valid inputs are 1, 2, 3.")
 
