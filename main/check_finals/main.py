@@ -1,7 +1,6 @@
 import pandas as pd
-from pypdf import PdfReader
 from reusables import print_discrepancies, TIME_DISCREPANCY, SEED_TIME_DISCREPANCY, SWIMMER_NOT_FOUND_DISCREPANCY
-from reusables import match_swimmer, parse_name, parse_swimmer, normalise_time
+from reusables import match_swimmer, parse_name, normalise_time, read_pdf
 
 def get_finals_tables(finals_file):
     """
@@ -47,49 +46,8 @@ def check_finals(finals_file, pdf_file):
     # We have 45 tables, each with shape (7 rows, 9 columns)
     finals_tables = get_finals_tables(finals_file)
    
-    # Read the results PDF
-    # Read the qualifiers results PDF
-    reader = PdfReader(pdf_file)
-   
-    # Extract text from each page and split into lines
-    lines = []
-    for page in reader.pages:
-        text = page.extract_text() or ""
-        lines += text.split('\n')
-    
-    pdf_tables = []  # This will hold a DataFrame per event
-    idx = 0
-    while idx < len(lines):
-        # Skip 200m event
-        if "200 SC" in lines[idx]:
-            idx += 1
-        elif lines[idx].strip().startswith("Event"):
-            idx += 2
-           
-            # Skip event details
-            if idx < len(lines) and "Prelim" in lines[idx]:
-                idx += 1
-           
-            # Collect swimmer data for this event
-            swimmers = []
-            while idx < len(lines) and not lines[idx].strip().startswith("Event"):
-                if lines[idx].strip().startswith("Esc"):
-                    name, seed_time, time = parse_swimmer(lines[idx])
-                    swimmers.append({
-                        "Name": name,
-                        "Qualifiers Time": seed_time, # Here we take the seed time as the qualifier time
-                        "Finals Time": time # This is the finals time
-                    })
-                idx += 1
-            # If any swimmers were found, make a DataFrame
-            if swimmers:
-                df = pd.DataFrame(swimmers)
-                pdf_tables.append(df)
-        else:
-            idx += 1
-    
-    # Only keep even tables (index-wise) because odd ones are qualifiers
-    pdf_tables = pdf_tables[::2]
+    # Read pdf
+    pdf_tables = read_pdf(pdf_file, isQualifiers=False)
     
     # Compare finals table and pdf data and alert user of any differences
     
@@ -137,7 +95,7 @@ def check_finals(finals_file, pdf_file):
 
             if len(swimmer) > 0:
                 # Compare qualifier times
-                finals_qualifier_time = swimmer.iloc[0][f"Qualifier {event_name}"]
+                finals_qualifier_time = swimmer[f"Qualifier {event_name}"].iloc[0]
 
                 # If we have NS in the PDF and DNS in the finals, we consider it a match
                 if pdf_qualifier_time == "NS" and finals_qualifier_time == "DNS":

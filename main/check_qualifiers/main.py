@@ -1,9 +1,7 @@
-from pypdf import PdfReader
 import pandas as pd
 from leahify_qualifiers import get_leah_tables
 from reusables import print_discrepancies, TIME_DISCREPANCY, SEED_TIME_DISCREPANCY, SWIMMER_NOT_FOUND_DISCREPANCY
-from reusables import match_swimmer, get_event_name, parse_name, parse_swimmer, normalise_time
-
+from reusables import match_swimmer, get_event_name, parse_name, normalise_time, read_pdf
 
 
 def clean_name(name):
@@ -12,50 +10,32 @@ def clean_name(name):
     """
     return name.replace(" -", "").strip()
 
+def split_extra_rows(leah_table):
+    # Extra rows are those that are below the EXTRA header
+    leah_normal_rows = []
+    for _, row in leah_table.iterrows():
+        if row['Lane'] == 'EXTRA':
+            break
+        leah_normal_rows.append(row)
+
+    # Add the rest of the rows as extra rows. (+1 to skip the 'EXTRA' header row)
+    leah_extra_df = leah_table.iloc[len(leah_normal_rows) + 1:].reset_index(drop=True)
+    leah_normal_df = pd.DataFrame(leah_normal_rows)
+    leah_normal_df = leah_normal_df.dropna(subset=["Name", "Seed Time", "Time"])
+
+    return leah_normal_df, leah_extra_df
+
 
 def check_qualifiers(output_table_path, pdf_path):
+    """
+    Check the qualifiers excel sheet against the heat results PDF.
+    """
     # Extract the tables using the get_leah_tables function
     # EXTRA rows will just be added at the end of each event table, so we can re-use the same function
     leah_tables, _, _ = get_leah_tables(output_table_path, None)
 
-    # Read the qualifiers results PDF
-    reader = PdfReader(pdf_path)
-    
-    # Extract text from each page and split into lines
-    lines = []
-    for page in reader.pages:
-        text = page.extract_text() or ""
-        lines += text.split('\n')
-
-    pdf_tables = []  # This will hold a DataFrame per event
-    idx = 0
-
-    while idx < len(lines):
-        if lines[idx].strip().startswith("Event"):
-            idx += 2
-            
-            # Skip event details
-            if idx < len(lines) and "Prelim" in lines[idx]:
-                idx += 1
-            
-            # Collect swimmer data for this event
-            swimmers = []
-            while idx < len(lines) and not lines[idx].strip().startswith("Event"):
-                if lines[idx].strip().startswith("Esc"):
-                    name, seed_time, time = parse_swimmer(lines[idx])
-                    swimmers.append({
-                        "Name": name,
-                        "Seed Time": seed_time,
-                        "Time": time
-                    })
-                idx += 1
-
-            # If any swimmers were found, make a DataFrame
-            if swimmers:
-                df = pd.DataFrame(swimmers)
-                pdf_tables.append(df)
-        else:
-            idx += 1
+    # Read the PDF file
+    pdf_tables = read_pdf(pdf_path, isQualifiers=True)
 
     # Compare output table and pdf data and alert user of any differences
 
@@ -72,17 +52,7 @@ def check_qualifiers(output_table_path, pdf_path):
         event_name = get_event_name(leah_tables[tableIdx].iloc[0]['Lane'])
 
         # Split table into normal and extra rows
-        # Extra rows are those that are below the EXTRA header
-        leah_normal_rows = []
-        for _, row in leah_tables[tableIdx].iterrows():
-            if row['Lane'] == 'EXTRA':
-                break
-            leah_normal_rows.append(row)
-
-        # Add the rest of the rows as extra rows. (+1 to skip the 'EXTRA' header row)
-        leah_extra_rows = leah_tables[tableIdx].iloc[len(leah_normal_rows) + 1:].reset_index(drop=True)
-        leah_normal_df = pd.DataFrame(leah_normal_rows)
-        leah_normal_df = leah_normal_df.dropna(subset=["Name", "Seed Time", "Time"])
+        leah_normal_df, leah_extra_df = split_extra_rows(leah_tables[tableIdx])
         
         # For normal rows, match swimmer names and times directly
         for _, row in leah_normal_df.iterrows():
@@ -150,7 +120,7 @@ def check_qualifiers(output_table_path, pdf_path):
             swimmer = match_swimmer(
                 pdf_first_name,
                 pdf_surname,
-                leah_extra_rows,
+                leah_extra_df,
                 automatic_matches,
                 manual_matches,
                 sfirst_name_col="Lane",

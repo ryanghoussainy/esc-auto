@@ -1,4 +1,6 @@
 import re
+import pandas as pd
+from pypdf import PdfReader
 
 
 REGEX_EVENT_NAME = r"\b(25|50|100|200)\s*SC\s*Meter\s*(Freestyle|Backstroke|Breaststroke|Butterfly|IM)"
@@ -119,4 +121,64 @@ def extract_keyword(x):
             return kw
     return None
 
+def read_pdf(pdf_path, isQualifiers: bool):
+    """
+    Read a PDF file (either heat results of full results) and return the list of pdf tables.
+    - For heat results (qualifiers), this will return all of the tables.
+    - For finals, this will return only the finals tables (since there are also prelim tables which are not necessary).
+      The finals tables contain both the prelim time and the finals time.
+    """
+    # Define column name for times in resulting DataFrame
+    if isQualifiers:
+        prev_time = "Seed Time"
+        cur_time = "Time"
+    else:
+        prev_time = "Qualifiers Time"
+        cur_time = "Finals Time"
 
+    # Read the results PDF
+    # Read the qualifiers results PDF
+    reader = PdfReader(pdf_path)
+   
+    # Extract text from each page and split into lines
+    lines = []
+    for page in reader.pages:
+        text = page.extract_text() or ""
+        lines += text.split('\n')
+    
+    pdf_tables = []  # This will hold a DataFrame per event
+    idx = 0
+    while idx < len(lines):
+        # Skip 200m event
+        if "200 SC" in lines[idx]:
+            idx += 1
+        elif lines[idx].strip().startswith("Event"):
+            idx += 2
+           
+            # Skip event details
+            if idx < len(lines) and "Prelim" in lines[idx]:
+                idx += 1
+           
+            # Collect swimmer data for this event
+            swimmers = []
+            while idx < len(lines) and not lines[idx].strip().startswith("Event"):
+                if lines[idx].strip().startswith("Esc"):
+                    name, seed_time, time = parse_swimmer(lines[idx])
+                    swimmers.append({
+                        "Name": name,
+                        prev_time: seed_time, # Here we take the seed time as the qualifier time
+                        cur_time: time # This is the finals time
+                    })
+                idx += 1
+            # If any swimmers were found, make a DataFrame
+            if swimmers:
+                df = pd.DataFrame(swimmers)
+                pdf_tables.append(df)
+        else:
+            idx += 1
+    
+    if isQualifiers:
+        return pdf_tables
+    else:
+        # Only keep even tables (index-wise) because odd ones are qualifiers
+        return pdf_tables[::2]
