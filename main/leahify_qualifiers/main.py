@@ -287,6 +287,7 @@ def save_output_table_to_excel(
 def leahify_qualifiers(
         sfile: str,
         lfile: str,
+        output_path: str = "output.xlsx"
 ) -> None:
     '''
     Turn Sammy's version of qualifiers into Leah's version.
@@ -312,4 +313,4 @@ def leahify_qualifiers(
     output_table = combine_tables(leah_tables_with_extras)
 
     # Save the output table to an Excel file
-    save_output_table_to_excel(output_table, "output.xlsx")
+    save_output_table_to_excel(output_table, output_path)

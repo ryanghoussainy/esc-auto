@@ -1,6 +1,6 @@
 import pandas as pd
 from leahify_qualifiers import get_leah_tables
-from reusables import print_discrepancies, TIME_DISCREPANCY, SEED_TIME_DISCREPANCY, SWIMMER_NOT_FOUND_DISCREPANCY
+from reusables import print_discrepancies, TIME_DISCREPANCY, SWIMMER_NOT_FOUND_DISCREPANCY
 from reusables import match_swimmer, get_event_name, parse_name, normalise_time, read_pdf
 
 
@@ -87,7 +87,7 @@ def check_qualifiers(output_table_path, pdf_path):
                     pdf_seed_time_normalised = normalise_time(matched_pdf_row['Seed Time'].values[0])
                     leah_seed_time_normalised = normalise_time(seed_time)
                     if pdf_seed_time_normalised != leah_seed_time_normalised:
-                        discrepancies.append((SEED_TIME_DISCREPANCY, name, event_name, matched_pdf_row['Seed Time'].values[0], seed_time))
+                        discrepancies.append((TIME_DISCREPANCY, name, event_name, matched_pdf_row['Seed Time'].values[0], seed_time))
 
                     # SUCCESSFUL MATCH
                     # Remove matched row from pdf table
@@ -128,6 +128,9 @@ def check_qualifiers(output_table_path, pdf_path):
             )
 
             if len(swimmer) > 0:
+                # Get full name
+                full_name = f"{swimmer['Lane'].iloc[0]} {swimmer['Name'].iloc[0]}"
+                
                 # If we found a swimmer, check if the times match
                 leah_time = swimmer['Time'].iloc[0]
 
@@ -145,7 +148,7 @@ def check_qualifiers(output_table_path, pdf_path):
                 pdf_time_normalised = normalise_time(pdf_time)
                 leah_time_normalised = normalise_time(leah_time)
                 if pdf_time_normalised != leah_time_normalised:
-                    discrepancies.append((TIME_DISCREPANCY, swimmer['Name'].iloc[0], event_name, pdf_time, leah_time))
+                    discrepancies.append((TIME_DISCREPANCY, full_name, event_name, pdf_time, leah_time))
                 
                 # SUCCESSFUL MATCH
                 # Remove matched row from pdf table
@@ -153,7 +156,7 @@ def check_qualifiers(output_table_path, pdf_path):
             else:
                 # If we didn't find a swimmer, we have a mismatch
                 # We don't know the name of the swimmer, so we just use the PDF name
-                discrepancies.append((SWIMMER_NOT_FOUND_DISCREPANCY, pdf_row['Name'], event_name, pdf_time, ""))
+                discrepancies.append((SWIMMER_NOT_FOUND_DISCREPANCY, pdf_name, event_name, pdf_time, ""))
         # If there are any swimmers left in the pdf table, they are extra rows
         # We can just add them to the leah_extra_rows DataFrame
         if not pdf_table.empty:

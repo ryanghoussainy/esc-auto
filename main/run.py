@@ -4,8 +4,18 @@ from check_finals import check_finals
 import sys
 
 def main():
+    if len(sys.argv) == 1:
+        # No arguments - launch GUI
+        try:
+            from gui_app import main as gui_main
+            gui_main()
+        except ImportError:
+            print("GUI dependencies not installed. Install with: pip install tkinterdnd2")
+            print("Or use command line with arguments 1, 2, or 3.")
+        return
+    
     if len(sys.argv) != 2 or sys.argv[1] not in ['1', '2', '3']:
-        print("Invalid input. Valid inputs are 1, 2, 3.")
+        print("Invalid input. Valid inputs are 1, 2, 3, or no arguments for GUI.")
         return
 
     input = int(sys.argv[1])

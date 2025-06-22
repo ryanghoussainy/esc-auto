@@ -3,3 +3,6 @@ __pycache__
 
 # Temporary excel files
 ~$*
+
+# environment files
+.venv
