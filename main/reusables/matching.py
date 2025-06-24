@@ -38,6 +38,7 @@ def prompt_manual_match(
     manual_matches: dict[tuple[str, str], tuple[str, str]],
     sfirst_name_col: str = "First name",
     ssurname_col: str = "Surname",
+    user_input_callback = None,
 ) -> pd.DataFrame:
     """
     Prompt the user to manually confirm a match from a list of scored candidates.
@@ -49,13 +50,21 @@ def prompt_manual_match(
         print_colour(YELLOW, f"{lfirst_name.capitalize()} {lsurname.capitalize()}", end="")
         print_colour(YELLOW, f" -> {sfirst_name.capitalize()} {ssurname.capitalize()}", end="")
         print(f" (similarity score: {score}%)")
-        match = input(VALID_MATCH_INPUTS_STR)
+        
+        if user_input_callback:
+            match = user_input_callback(f"{lfirst_name.capitalize()} {lsurname.capitalize()} -> {sfirst_name.capitalize()} {ssurname.capitalize()} (similarity score: {score}%)")
+        else:
+            match = input(VALID_MATCH_INPUTS_STR)
 
         while match.lower() not in VALID_MATCH_INPUTS:
             print("Invalid input")
-            match = input(VALID_MATCH_INPUTS_STR)
+            if user_input_callback:
+                match = user_input_callback("Invalid input, please try again")
+            else:
+                match = input(VALID_MATCH_INPUTS_STR)
 
         if match.lower() == 'exit':
+            print_colour(RED, "Cancelled")
             exit()
         if match.lower() == 'y':
             manual_matches[(lfirst_name, lsurname)] = (sfirst_name, ssurname)
@@ -66,7 +75,7 @@ def prompt_manual_match(
             return swimmer
 
     raise ValueError(f"No swimmer found: {lfirst_name.capitalize()} {lsurname.capitalize()}")
-    
+
 
 def match_swimmer(
     lfirst_name: str,
@@ -76,6 +85,7 @@ def match_swimmer(
     manual_matches: dict[tuple[str, str], tuple[str, str]],
     sfirst_name_col: str = "First name",
     ssurname_col: str = "Surname",
+    user_input_callback = None,
 ) -> pd.DataFrame:
     """
     Find and return the swimmer row in qualifiers_table matching the given Leah swimmer.
@@ -130,4 +140,5 @@ def match_swimmer(
         manual_matches,
         sfirst_name_col=sfirst_name_col,
         ssurname_col=ssurname_col,
+        user_input_callback=user_input_callback,
     )

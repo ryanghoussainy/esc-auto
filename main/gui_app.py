@@ -104,12 +104,6 @@ class SwimmingResultsApp:
             'full_results_pdf': None
         }
         
-        # Variables for user input handling
-        self.waiting_for_input = False
-        self.input_result = None
-        self.input_prompt = ""
-        self.input_validation_attempts = 0
-        
         self.setup_ui()
         
     def setup_ui(self):
@@ -117,11 +111,11 @@ class SwimmingResultsApp:
         title_label = tk.Label(
             self.root, 
             text="House Champs Times", 
-            font=("Segoe UI", 24, "bold"),
+            font=("Segoe UI", 18, "bold"),
             bg='#f8f9fa',
             fg='#212529',
         )
-        title_label.pack(pady=20)
+        title_label.pack()
         
         # Create main container with paned window
         main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL, style="Modern.TFrame")
@@ -206,93 +200,152 @@ class SwimmingResultsApp:
         self.output_text.tag_configure("red", foreground="#ff6b6b")
         self.output_text.tag_configure("yellow", foreground="#ffd93d")
         self.output_text.tag_configure("green", foreground="#6bcf7f")
-        
-        # Modern input frame
-        self.input_frame = tk.Frame(parent, bg='#f8f9fa')
-        
-        input_container = tk.Frame(self.input_frame, bg='#f8f9fa')
-        input_container.pack(fill=tk.X, pady=(0, 20), padx=10)
-        
-        self.input_entry = tk.Entry(
-            input_container,
-            font=("Segoe UI", 11),
-            width=35,
-            relief='flat',
-            borderwidth=0,
-            highlightthickness=2,
-            highlightcolor='#0078d4',
-            bg='#ffffff',
-            fg='#212529'
-        )
-        self.input_entry.pack(side=tk.LEFT, padx=(0, 15), ipady=8)
-        self.input_entry.bind('<Return>', self.handle_input_submit)
-        
-        self.input_submit_btn = ttk.Button(
-            input_container,
-            text="Submit",
-            command=self.handle_input_submit,
-            style='Modern.TButton'
-        )
-        self.input_submit_btn.pack(side=tk.LEFT)
     
     def clear_output(self):
         self.output_text.config(state='normal')
         self.output_text.delete(1.0, tk.END)
         self.output_text.config(state='disabled')
     
-    def show_input_prompt(self, prompt):
-        self.input_prompt = prompt
-        self.input_frame.pack(fill=tk.X, pady=(0, 10))
-        self.input_entry.focus_set()
-        self.waiting_for_input = True
-        self.input_validation_attempts = 0
-    
-    def hide_input_prompt(self):
-        self.input_frame.pack_forget()
-        self.waiting_for_input = False
-        self.input_entry.delete(0, tk.END)
-        self.input_validation_attempts = 0
-    
-    def handle_input_submit(self, event=None):
-        if self.waiting_for_input:
-            user_input = self.input_entry.get()
-            self.input_result = user_input
-            self.hide_input_prompt()
-    
-    def get_user_input(self):
+    def get_user_input(self, message=None):
+        # If message is provided directly, use it
+        if message:
+            result = self.show_match_confirmation_dialog(message)
+            return result if result else "exit"
+        
         # Extract the prompt from the last few lines written to output
         all_text = self.output_text.get(1.0, tk.END).strip()
         lines = all_text.split('\n')
         
-        # Look for the last line that contains a prompt pattern
+        # Look for match confirmation prompts
         prompt = ""
+        swimmer_info = ""
+        
         for line in reversed(lines):
             clean_line = re.sub(r'\033\[\d+m', '', line).strip()
-            if clean_line and ("?" in clean_line or ":" in clean_line):
+            if "Is this the right match?" in clean_line:
                 prompt = clean_line
                 break
+            elif "->" in clean_line and "similarity score" in clean_line:
+                swimmer_info = clean_line
+                break
         
-        if not prompt and lines:
-            # Fallback to last non-empty line
-            for line in reversed(lines):
-                clean_line = re.sub(r'\033\[\d+m', '', line).strip()
-                if clean_line:
-                    prompt = clean_line
-                    break
+        # Show popup dialog for match confirmation
+        if prompt or swimmer_info:
+            result = self.show_match_confirmation_dialog(swimmer_info or prompt)
+            return result if result else "exit"
         
-        # Show the input prompt in GUI
-        self.root.after(0, lambda: self.show_input_prompt(prompt))
-        
-        # Wait for user input
-        while self.waiting_for_input and self.input_result is None:
-            self.root.update()
-            threading.Event().wait(0.1)
+        # Fallback for any other input (shouldn't happen with current implementation)
+        return "n"
 
-        result = self.input_result
-        self.input_result = None
+    def show_match_confirmation_dialog(self, message):
+        """Show a custom dialog for swimmer match confirmation"""
+        # Extract swimmer names from the message for a cleaner dialog
+        if "->" in message:
+            # Parse the swimmer match info
+            match_info = re.sub(r'\033\[\d+m', '', message).strip()
+            dialog_message = f"Confirm swimmer match:\n\n{match_info}"
+        else:
+            dialog_message = message
+    
+        # Create custom dialog
+        dialog = tk.Toplevel(self.root)
+        dialog.title("Confirm Swimmer Match")
+        dialog.resizable(False, False)
+        dialog.transient(self.root)
+        dialog.grab_set()  # Make dialog modal
+        
+        # Dialog dimensions
+        dialog_width = 400
+        dialog_height = 200
+        
+        # Force the parent window to update its geometry info
+        self.root.update_idletasks()
+        
+        # Now get accurate parent window information
+        parent_x = self.root.winfo_x()
+        parent_y = self.root.winfo_y()
+        parent_width = self.root.winfo_width()
+        parent_height = self.root.winfo_height()
+        
+        # Calculate centered position
+        x = parent_x + (parent_width - dialog_width) // 2
+        y = parent_y + (parent_height - dialog_height) // 2
+        
+        # Ensure dialog stays on screen
+        x = max(0, x)
+        y = max(0, y)
+        
+        # Set the position explicitly
+        dialog.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
+    
+        # Message label
+        msg_label = tk.Label(
+            dialog,
+            text=dialog_message,
+            font=("Segoe UI", 11),
+            wraplength=350,
+            justify=tk.LEFT,
+            padx=20,
+            pady=20
+        )
+        msg_label.pack(expand=True)
+    
+        # Button frame
+        button_frame = tk.Frame(dialog)
+        button_frame.pack(pady=10)
+    
+        result = {"value": "exit"}
+    
+        def accept():
+            result["value"] = "y"
+            dialog.destroy()
+    
+        def deny():
+            result["value"] = "n"
+            dialog.destroy()
 
-        # Don't echo the input - let the underlying logic handle all output
-        return f"{result}\n" if result else "\n"
+        def on_close():
+            result["value"] = "exit"
+            dialog.destroy()
+
+        # Bind the close event
+        dialog.protocol("WM_DELETE_WINDOW", on_close)
+    
+        # Accept button
+        accept_btn = tk.Button(
+            button_frame,
+            text="Accept Match",
+            command=accept,
+            bg="#27ae60",
+            fg="white",
+            font=("Segoe UI", 10, "bold"),
+            padx=20,
+            pady=8
+        )
+        accept_btn.pack(side=tk.LEFT, padx=10)
+    
+        # Deny button
+        deny_btn = tk.Button(
+            button_frame,
+            text="Deny Match",
+            command=deny,
+            bg="#e74c3c",
+            fg="white",
+            font=("Segoe UI", 10, "bold"),
+            padx=20,
+            pady=8
+        )
+        deny_btn.pack(side=tk.LEFT, padx=10)
+        
+        # Ensure dialog is visible and focused
+        dialog.deiconify()
+        dialog.lift()
+        dialog.focus_force()
+    
+        # Wait for dialog to close
+        dialog.wait_window()
+    
+        return result["value"]
     
     def _write_to_output(self, text):
         self.output_text.config(state='normal')
@@ -316,11 +369,11 @@ class SwimmingResultsApp:
         instructions.pack(pady=20)
         
         # File input areas
-        self.create_file_input(frame, "Sammy's Qualifiers File (.xlsx)", 'sammy_qualifiers', [('Excel files', '*.xlsx')])
-        self.create_file_input(frame, "Leah's Template File (.xls)", 'leah_template', [('Excel files', '*.xls *.xlsx')])
+        self.create_file_input(frame, "Sammy's Qualifiers File", 'sammy_qualifiers', [('Excel files', '*.xls *.xlsx')])
+        self.create_file_input(frame, "Leah's Template File", 'leah_template', [('Excel files', '*.xls *.xlsx')])
 
         # Output file selection
-        self.create_output_file_input(frame, "Output File Location", 'output_file', [('Excel files', '*.xlsx')])
+        self.create_output_file_input(frame, "Output File Location", 'output_file', [('Excel files', '*.xls *.xlsx')])
         
         # Process button
         process_btn = ttk.Button(
@@ -347,7 +400,7 @@ class SwimmingResultsApp:
         instructions.pack(pady=20)
         
         # File input areas
-        self.create_file_input(frame, "Generated Output File (output.xlsx)", 'output_excel', [('Excel files', '*.xlsx')])
+        self.create_file_input(frame, "Generated Output File", 'output_excel', [('Excel files', '*.xls *.xlsx')])
         self.create_file_input(frame, "Heat Results PDF", 'heat_results_pdf', [('PDF files', '*.pdf')])
         
         # Process button
@@ -511,7 +564,8 @@ class SwimmingResultsApp:
                     leahify_qualifiers(
                         self.file_paths['sammy_qualifiers'],
                         self.file_paths['leah_template'],
-                        output_path  # Pass the output path
+                        output_path,  # Pass the output path
+                        user_input_callback=self.get_user_input
                     )
                 
                 self._write_to_output(f"\n✅ FILES PROCESSED SUCCESSFULLY! Output saved as '{output_path}'\n")
@@ -532,7 +586,7 @@ class SwimmingResultsApp:
                 self.clear_output()
                 
                 with OutputCapture(self.output_text, self.get_user_input):
-                    check_qualifiers(output_path, self.file_paths['heat_results_pdf'])
+                    check_qualifiers(output_path, self.file_paths['heat_results_pdf'], user_input_callback=self.get_user_input)
                 
                 self._write_to_output("\n✅ QUALIFIER CHECK COMPLETED!\n")
             except Exception as e:
@@ -552,7 +606,8 @@ class SwimmingResultsApp:
                 with OutputCapture(self.output_text, self.get_user_input):
                     check_finals(
                         self.file_paths['finals_excel'],
-                        self.file_paths['full_results_pdf']
+                        self.file_paths['full_results_pdf'],
+                        user_input_callback=self.get_user_input
                     )
                 
                 self._write_to_output("\n✅ FINALS CHECK COMPLETED!\n")

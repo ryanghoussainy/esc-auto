@@ -3,3 +3,4 @@ openpyxl
 fuzzywuzzy
 pypdf
 tkinterdnd2
+xlrd

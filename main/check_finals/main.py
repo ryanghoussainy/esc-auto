@@ -38,7 +38,7 @@ def get_event_name_from_finals(finals_table):
     # We get the index 7 column because that header is just the event name in the finals excel
     return str(finals_table.columns[7])
 
-def check_finals(finals_file, pdf_file):
+def check_finals(finals_file, pdf_file, user_input_callback=None):
     """
     Check the finals results against the full results PDF.
     """
@@ -91,6 +91,7 @@ def check_finals(finals_file, pdf_file):
                 finals_df, # In Sammy's format
                 automatic_matches,
                 manual_matches,
+                user_input_callback=user_input_callback
             )
 
             if len(swimmer) > 0:

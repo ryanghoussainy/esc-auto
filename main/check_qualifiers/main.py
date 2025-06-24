@@ -26,7 +26,7 @@ def split_extra_rows(leah_table):
     return leah_normal_df, leah_extra_df
 
 
-def check_qualifiers(output_table_path, pdf_path):
+def check_qualifiers(output_table_path, pdf_path, user_input_callback=None):
     """
     Check the qualifiers excel sheet against the heat results PDF.
     """
@@ -125,6 +125,7 @@ def check_qualifiers(output_table_path, pdf_path):
                 manual_matches,
                 sfirst_name_col="Lane",
                 ssurname_col="Name",
+                user_input_callback=user_input_callback,
             )
 
             if len(swimmer) > 0:

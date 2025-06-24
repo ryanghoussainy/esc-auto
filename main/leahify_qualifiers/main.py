@@ -66,6 +66,7 @@ def match_swimmers(
         qualifiers_table: pd.DataFrame,
         leah_tables: list[pd.DataFrame],
         events: list[str],
+        user_input_callback = None,
 ) -> dict:
     '''
     Match swimmers from Leah's version to Sammy's version.
@@ -110,12 +111,14 @@ def match_swimmers(
             lfirst_name = lfirst_names.split()[0]
 
             # Match the swimmer to Sammy's version
+            # Match the swimmer to Sammy's version
             swimmer = match_swimmer(
                 lfirst_name,
                 lsurname,
                 qualifiers_table,
                 automatic_matches,
-                manual_matches
+                manual_matches,
+                user_input_callback=user_input_callback
             )
             
             # Increment number of matches
@@ -287,7 +290,8 @@ def save_output_table_to_excel(
 def leahify_qualifiers(
         sfile: str,
         lfile: str,
-        output_path: str = "output.xlsx"
+        output_path: str = "output.xlsx",
+        user_input_callback = None
 ) -> None:
     '''
     Turn Sammy's version of qualifiers into Leah's version.
@@ -301,7 +305,7 @@ def leahify_qualifiers(
     events = [get_event_name(event) for event in full_events]
 
     # For each swimmer in Leah's version, find the corresponding time in Sammy's version
-    matched_events = match_swimmers(qualifiers_table, leah_tables, events)
+    matched_events = match_swimmers(qualifiers_table, leah_tables, events, user_input_callback)
 
     # Get extra swimmers per event
     extras_per_event = get_extras_per_event(qualifiers_table, events, swimmer_info, matched_events)
