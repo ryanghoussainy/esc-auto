@@ -20,11 +20,11 @@ def main():
 
     input = int(sys.argv[1])
     if input == 1:
-        leahify_qualifiers('examples/1_doc.xlsx', 'examples/2_docLeah.xls')
+        leahify_qualifiers('examples2/1_qualifiers.xlsx', 'examples2/2_leahQualifiersTemplate.xlsx')
     elif input == 2:
-        check_qualifiers("output.xlsx", "examples/3_docHeatResults.pdf")
+        check_qualifiers("output.xlsx", "examples2/3_heatResults.pdf")
     elif input == 3:
-        check_finals("examples/4_docFinalResultsLeah.xlsx", "examples/5_docFullResults.pdf")
+        check_finals("examples/4_finals.xlsx", "examples/5_fullResults.pdf")
     else:
         print("Invalid input. Valid inputs are 1, 2, 3.")
 

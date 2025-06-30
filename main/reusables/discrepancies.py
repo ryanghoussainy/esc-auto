@@ -18,8 +18,9 @@ def print_discrepancies(discrepancies, isQualifiers):
                 print_colour(RED, "Time mismatch ", end='')
                 print("for ", end='')
                 print_colour(YELLOW, name, end=' - ')
-                print(f"Event: {event_name}, ", end='')
-                print(f"PDF: {pdf_time}, EXCEL: {excel_time}")
+                print(f"Event: {event_name}")
+                print(f"     PDF: {pdf_time}")
+                print(f"     EXCEL: {excel_time}")
             elif discrepancy_type == SWIMMER_NOT_FOUND_DISCREPANCY:
                 print_colour(RED, f"Swimmer {name} not found in PDF")
     else:

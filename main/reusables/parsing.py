@@ -154,9 +154,6 @@ def read_pdf(pdf_path, isQualifiers: bool):
     pdf_tables = []  # This will hold a DataFrame per event
     idx = 0
     while idx < len(lines):
-        # Skip 200m event
-        # if "200 SC" in lines[idx]:
-        #     idx += 1
         if lines[idx].strip().startswith("Event"):
             idx += 2
            
