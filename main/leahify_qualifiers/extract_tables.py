@@ -4,6 +4,7 @@ Read the qualifiers excel sheet and store the data.
 
 import pandas as pd
 import re
+from reusables import is_final
 
 REGEX_AGE_RANGE_SAMMY = r"\b\d{1,2}\s*&\s*(Under|Over|under|over)|\b\d{1,2}\s*(-|/)\s*\d{1,2}"
 
@@ -39,9 +40,6 @@ def extract_tables(
     events = []  # To store the event names
 
     swimmer_info = {} # To store swimmer info (age from, age to, gender)
-    current_gender = None
-    current_age_from = None
-    current_age_to = None
 
     headers_found = False
 
@@ -89,16 +87,17 @@ def extract_tables(
                             current_age_from, current_age_to = map(int, age_range.split("/"))
                         else:
                             raise ValueError(f"Could not extract age range. Did not find - or /: {cell}")
-                # Ignore 200m freestyle
-                elif "200" in cell:
-                    pass
+                # Finals don't have age ranges
+                elif is_final(cell):
+                    current_age_from = 0
+                    current_age_to = 99
                 else:
                     raise ValueError(f"Could not extract age range: {cell}")
                 
         # If we have found the headers, then add the swimmer row to the current table.
         elif headers_found and not row.isnull().all():
             current_table.append(row.to_list())
-            # Also add it to the current gender set
+            # Also add it to the swimmer info
             first_name, surname = row[0], row[1]
             swimmer_info[(first_name, surname)] = (current_age_from, current_age_to, current_gender)
 

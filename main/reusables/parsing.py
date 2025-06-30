@@ -99,10 +99,15 @@ def parse_swimmer(line):
     if tokens and tokens[0] == '':
         tokens.pop(0)
 
-    # Extract the seed time
-    if not tokens or (not is_time(tokens[0]) and extract_keyword(tokens[0]) is None):
-        raise ValueError("Expected a time or keyword after name")
-    seed_time = tokens.pop(0)
+    # Extract the seed time if it exists
+    if tokens and tokens[0] != "q":
+        # The check of "q" is becaues there is a q at the end for qualified swimmers
+        if not is_time(tokens[0]) and extract_keyword(tokens[0]) is None:
+            raise ValueError(f"Invalid seed time format: {tokens[0]}")
+        else:
+            seed_time = tokens.pop(0)
+    else:
+        seed_time = None
 
     return name, seed_time, achieved_time
 
@@ -150,9 +155,9 @@ def read_pdf(pdf_path, isQualifiers: bool):
     idx = 0
     while idx < len(lines):
         # Skip 200m event
-        if "200 SC" in lines[idx]:
-            idx += 1
-        elif lines[idx].strip().startswith("Event"):
+        # if "200 SC" in lines[idx]:
+        #     idx += 1
+        if lines[idx].strip().startswith("Event"):
             idx += 2
            
             # Skip event details

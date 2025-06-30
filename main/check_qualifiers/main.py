@@ -1,5 +1,5 @@
 import pandas as pd
-from leahify_qualifiers import get_leah_tables
+from leahify_qualifiers import get_leah_tables, TIME_COLUMN_INDEX
 from reusables import print_discrepancies, TIME_DISCREPANCY, SWIMMER_NOT_FOUND_DISCREPANCY
 from reusables import match_swimmer, get_event_name, parse_name, normalise_time, read_pdf
 
@@ -14,14 +14,14 @@ def split_extra_rows(leah_table):
     # Extra rows are those that are below the EXTRA header
     leah_normal_rows = []
     for _, row in leah_table.iterrows():
-        if row['Lane'] == 'EXTRA':
+        if row['Lane'].lower() == 'extra':
             break
         leah_normal_rows.append(row)
 
     # Add the rest of the rows as extra rows. (+1 to skip the 'EXTRA' header row)
     leah_extra_df = leah_table.iloc[len(leah_normal_rows) + 1:].reset_index(drop=True)
     leah_normal_df = pd.DataFrame(leah_normal_rows)
-    leah_normal_df = leah_normal_df.dropna(subset=["Name", "Seed Time", "Time"])
+    leah_normal_df = leah_normal_df.dropna(subset=["Name"])
 
     return leah_normal_df, leah_extra_df
 
@@ -33,6 +33,9 @@ def check_qualifiers(output_table_path, pdf_path, user_input_callback=None):
     # Extract the tables using the get_leah_tables function
     # EXTRA rows will just be added at the end of each event table, so we can re-use the same function
     leah_tables, _, _ = get_leah_tables(output_table_path, None)
+
+    # Get time column name
+    time_column_name = leah_tables[0].columns[TIME_COLUMN_INDEX]
 
     # Read the PDF file
     pdf_tables = read_pdf(pdf_path, isQualifiers=True)
@@ -57,22 +60,23 @@ def check_qualifiers(output_table_path, pdf_path, user_input_callback=None):
         # For normal rows, match swimmer names and times directly
         for _, row in leah_normal_df.iterrows():
             name = clean_name(row['Name']) # Remove garbage pdf-read dashes
-            seed_time = row['Seed Time']
-            time = row['Time']
+            time = row[time_column_name]
 
             # Match only with the corresponding event table
             pdf_table = pdf_tables[tableIdx]
 
-            if name in pdf_table['Name'].values:
-                matched_pdf_row = pdf_table[pdf_table['Name'] == name]
+            clean_pdf_names = [clean_name(n) for n in pdf_table['Name'].values]
+
+            if name in clean_pdf_names:
+                matched_pdf_row = pdf_table[pdf_table['Name'].apply(clean_name) == name]
                 if not matched_pdf_row.empty:
                     # If we have NS in PDF and DNS in Leah, we consider them equal
-                    if matched_pdf_row['Time'].values[0] == "NS" and row['Time'] == "DNS":
+                    if matched_pdf_row['Time'].values[0] == "NS" and row[time_column_name] == "DNS":
                         pdf_table.drop(matched_pdf_row.index, inplace=True)
                         continue
                     
                     # If we have DQ with explanation, we consider them equal
-                    if "DQ" in matched_pdf_row['Time'].values[0] and "DQ" in row['Time']:
+                    if "DQ" in matched_pdf_row['Time'].values[0] and "DQ" in row[time_column_name]:
                         pdf_table.drop(matched_pdf_row.index, inplace=True)
                         continue
 
@@ -82,12 +86,6 @@ def check_qualifiers(output_table_path, pdf_path, user_input_callback=None):
 
                     if pdf_time_normalised != leah_time_normalised:
                         discrepancies.append((TIME_DISCREPANCY, name, event_name, matched_pdf_row['Time'].values[0], time))
-
-                    # Compare seed times
-                    pdf_seed_time_normalised = normalise_time(matched_pdf_row['Seed Time'].values[0])
-                    leah_seed_time_normalised = normalise_time(seed_time)
-                    if pdf_seed_time_normalised != leah_seed_time_normalised:
-                        discrepancies.append((TIME_DISCREPANCY, name, event_name, matched_pdf_row['Seed Time'].values[0], seed_time))
 
                     # SUCCESSFUL MATCH
                     # Remove matched row from pdf table
@@ -107,7 +105,7 @@ def check_qualifiers(output_table_path, pdf_path, user_input_callback=None):
         # So we use the match_swimmer function but "flip" the arguments.
         # For each row left in the pdf table (extra rows), we try to match it with a swimmer in Leah's extra rows.
         for _, pdf_row in pdf_table.iterrows():
-            # We only match name and time (not seed time, since Sammy's format doesn't have it)
+            # Match name and time
             pdf_name = pdf_row['Name']
             pdf_time = pdf_row['Time']
 
@@ -133,7 +131,7 @@ def check_qualifiers(output_table_path, pdf_path, user_input_callback=None):
                 full_name = f"{swimmer['Lane'].iloc[0]} {swimmer['Name'].iloc[0]}"
                 
                 # If we found a swimmer, check if the times match
-                leah_time = swimmer['Time'].iloc[0]
+                leah_time = swimmer[time_column_name].iloc[0]
 
                 # If we have NS in PDF and DNS in Leah, we consider them equal
                 if pdf_time == "NS" and leah_time == "DNS":

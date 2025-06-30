@@ -10,7 +10,7 @@ def main():
             from gui_app import main as gui_main
             gui_main()
         except ImportError:
-            print("GUI dependencies not installed. Install with: pip install tkinterdnd2")
+            print("GUI dependencies not installed. Install with: pip install -r requirements.txt")
             print("Or use command line with arguments 1, 2, or 3.")
         return
     

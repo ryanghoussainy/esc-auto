@@ -6,13 +6,14 @@ time in Sammy's version and add it to the dictionary.
 '''
 
 from .extract_tables import extract_tables, print_tables, concat_tables, print_first_rows
-from reusables import print_colour, GREEN, match_swimmer, parse_name, get_event_name
+from reusables import print_colour, GREEN, match_swimmer, parse_name, get_event_name, is_final
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Border, Side, Font, PatternFill
 from openpyxl.utils.dataframe import dataframe_to_rows
 import re
 
+TIME_COLUMN_INDEX = 5 # Index of the time column in Leah's tables
 
 GROUPS = ["Dolphins", "Herrings", "Seals", "Piranhas", "Marlins"]
 
@@ -66,6 +67,7 @@ def match_swimmers(
         qualifiers_table: pd.DataFrame,
         leah_tables: list[pd.DataFrame],
         events: list[str],
+        time_column_name: str,
         user_input_callback = None,
 ) -> dict:
     '''
@@ -97,10 +99,6 @@ def match_swimmers(
         for lrowIdx, lrow in ltable.iterrows():
             # Skip NAN rows
             if pd.isnull(lrow["Name"]):
-                continue
-
-            # Skip Finals (i.e. the 200m Free one-off final)
-            if "Time" not in lrow:
                 continue
 
             # Increment total number of swimmer rows
@@ -137,17 +135,17 @@ def match_swimmers(
             time = swimmer[event].values[0]
 
             # Set the column type to string
-            leah_tables[tableIdx] = leah_tables[tableIdx].astype({"Time": str})
+            leah_tables[tableIdx] = leah_tables[tableIdx].astype({time_column_name: str})
             
             # Set the time if it's not nan
-            leah_tables[tableIdx].at[lrowIdx, "Time"] = time if not pd.isnull(time) else "DNS"
+            leah_tables[tableIdx].at[lrowIdx, time_column_name] = time if not pd.isnull(time) else "DNS"
 
     # Print the number of matches
     print(f"Number of matches: {num_matches} / {total}")
 
     return matched_events
 
-def combine_tables(leah_tables: list[pd.DataFrame]) -> pd.DataFrame:
+def combine_tables(leah_tables: list[pd.DataFrame], time_column_name: str) -> pd.DataFrame:
     '''
     Concatenate all tables into a single table.
     '''
@@ -163,7 +161,7 @@ def combine_tables(leah_tables: list[pd.DataFrame]) -> pd.DataFrame:
         output_table = pd.concat([output_table, ltable_with_header])
 
     # Get rid of nan values in the Time column
-    output_table["Time"] = output_table["Time"].replace("nan", "")
+    output_table[time_column_name] = output_table[time_column_name].replace("nan", "")
 
     return output_table
 
@@ -180,10 +178,6 @@ def get_extras_per_event(
         # Get all events swam by the swimmer
         events_swam = set(event for event in set(events) if not pd.isnull(srow[event]) and srow[event] != "DNS")
 
-        # Remove the 200m Free since we only care about the normal events
-        if "200m Free" in events_swam:
-            events_swam.remove("200m Free")
-
         # Missing events
         missing_events = []
 
@@ -196,6 +190,12 @@ def get_extras_per_event(
         for missing_event in missing_events:
             # Get swimmer age range and gender
             age_from, age_to, gender = swimmer_info[(srow["First name"], srow["Surname"])]
+
+            # If it's a final event, we make the age range 0-99
+            if is_final(missing_event):
+                age_from = 0
+                age_to = 99
+            
             # Add the swimmer to the extras per event table
             extras_per_event.setdefault((missing_event, age_from, age_to, gender), []).append(srow)
 
@@ -233,8 +233,9 @@ def add_extras_to_leah_tables(
                     age_from, age_to = map(int, age_range.split("/"))
                 else:
                     raise ValueError(f"Could not extract age range. Did not find - or /: {event_cell}")
-        elif "200" in event_cell:
-            pass
+        elif is_final(event_cell):
+            age_from = 0
+            age_to = 99
         else:
             raise ValueError(f"Could not extract age range from event name: {event_cell}")
 
@@ -304,8 +305,11 @@ def leahify_qualifiers(
     leah_tables, full_events, _ = get_leah_tables(lfile, None)
     events = [get_event_name(event) for event in full_events]
 
+    # Get time column name in Leah's table
+    time_column_name = leah_tables[0].columns[TIME_COLUMN_INDEX]
+
     # For each swimmer in Leah's version, find the corresponding time in Sammy's version
-    matched_events = match_swimmers(qualifiers_table, leah_tables, events, user_input_callback)
+    matched_events = match_swimmers(qualifiers_table, leah_tables, events, time_column_name, user_input_callback)
 
     # Get extra swimmers per event
     extras_per_event = get_extras_per_event(qualifiers_table, events, swimmer_info, matched_events)
@@ -314,7 +318,7 @@ def leahify_qualifiers(
     leah_tables_with_extras = add_extras_to_leah_tables(leah_tables, extras_per_event)
 
     # Combine all tables into a single output table
-    output_table = combine_tables(leah_tables_with_extras)
+    output_table = combine_tables(leah_tables_with_extras, time_column_name)
 
     # Save the output table to an Excel file
     save_output_table_to_excel(output_table, output_path)
