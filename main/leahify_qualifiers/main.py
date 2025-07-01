@@ -265,6 +265,7 @@ def add_extras_to_leah_tables(
 def save_output_table_to_excel(
         output_table: pd.DataFrame,
         filename: str,
+        time_column_name: str,
 ) -> None:
     '''
     Save the output table to an Excel file.
@@ -280,7 +281,7 @@ def save_output_table_to_excel(
     for row in ws.iter_rows(min_row=1, max_row=len(output_table), min_col=1, max_col=len(output_table.columns)):
         for cell in row:
             cell.border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
-            if cell.column == 6 and cell.value != "Time":
+            if cell.column == 6 and cell.value != time_column_name:
                 cell.font = big_font
             if cell.row > 1 and cell.column == 1 and cell.value == "EXTRA":
                 cell.fill = yellow_fill
@@ -321,4 +322,4 @@ def leahify_qualifiers(
     output_table = combine_tables(leah_tables_with_extras, time_column_name)
 
     # Save the output table to an Excel file
-    save_output_table_to_excel(output_table, output_path)
+    save_output_table_to_excel(output_table, output_path, time_column_name)
