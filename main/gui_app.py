@@ -369,11 +369,11 @@ class SwimmingResultsApp:
         instructions.pack(pady=20)
         
         # File input areas
-        self.create_file_input(frame, "Sammy's Qualifiers File", 'sammy_qualifiers', [('Excel files', '*.xls *.xlsx')])
-        self.create_file_input(frame, "Leah's Template File", 'leah_template', [('Excel files', '*.xls *.xlsx')])
+        self.create_file_input(frame, "Sammy's Qualifiers EXCEL", 'sammy_qualifiers', [('Excel files', '*.xls *.xlsx')])
+        self.create_file_input(frame, "Leah's Template EXCEL", 'leah_template', [('Excel files', '*.xls *.xlsx')])
 
         # Output file selection
-        self.create_output_file_input(frame, "Output File Location", 'output_file', [('Excel files', '*.xls *.xlsx')])
+        self.create_output_file_input(frame, "Output EXCEL", 'output_file', [('Excel files', '*.xls *.xlsx')])
         
         # Process button
         process_btn = ttk.Button(
@@ -400,7 +400,7 @@ class SwimmingResultsApp:
         instructions.pack(pady=20)
         
         # File input areas
-        self.create_file_input(frame, "Generated Output File", 'output_excel', [('Excel files', '*.xls *.xlsx')])
+        self.create_file_input(frame, "Generated Output EXCEL", 'output_excel', [('Excel files', '*.xls *.xlsx')])
         self.create_file_input(frame, "Heat Results PDF", 'heat_results_pdf', [('PDF files', '*.pdf')])
         
         # Process button
@@ -428,7 +428,7 @@ class SwimmingResultsApp:
         instructions.pack(pady=20)
         
         # File input areas
-        self.create_file_input(frame, "Finals Excel File", 'finals_excel', [('Excel files', '*.xlsx')])
+        self.create_file_input(frame, "Finals EXCEL", 'finals_excel', [('Excel files', '*.xlsx')])
         self.create_file_input(frame, "Full Results PDF", 'full_results_pdf', [('PDF files', '*.pdf')])
         
         # Process button
