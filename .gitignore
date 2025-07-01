@@ -17,3 +17,6 @@ __pycache__
 # Local builds
 build/
 dist/
+
+# Example directories
+example*/
