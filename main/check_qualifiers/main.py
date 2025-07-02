@@ -1,7 +1,7 @@
 import pandas as pd
 from leahify_qualifiers import get_leah_tables, TIME_COLUMN_INDEX
 from reusables import print_discrepancies, TIME_DISCREPANCY, SWIMMER_NOT_FOUND_DISCREPANCY
-from reusables import match_swimmer, get_event_name, parse_name, normalise_time, read_pdf
+from reusables import match_swimmer, get_event_name, parse_name, normalise_time, read_pdf, rename_final_column
 
 
 def clean_name(name):
@@ -36,6 +36,9 @@ def check_qualifiers(output_table_path, pdf_path, user_input_callback=None):
 
     # Get time column name
     time_column_name = leah_tables[0].columns[TIME_COLUMN_INDEX]
+
+    # Rename the "Finals" column to the time column name in Leah's tables
+    rename_final_column(leah_tables, time_column_name)
 
     # Read the PDF file
     pdf_tables = read_pdf(pdf_path, isQualifiers=True)

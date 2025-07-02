@@ -6,7 +6,7 @@ time in Sammy's version and add it to the dictionary.
 '''
 
 from .extract_tables import extract_tables, print_tables, concat_tables, print_first_rows
-from reusables import print_colour, GREEN, match_swimmer, parse_name, get_event_name, is_final
+from reusables import print_colour, GREEN, match_swimmer, parse_name, get_event_name, is_final, rename_final_column
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Border, Side, Font, PatternFill
@@ -281,13 +281,28 @@ def save_output_table_to_excel(
     for row in ws.iter_rows(min_row=1, max_row=len(output_table), min_col=1, max_col=len(output_table.columns)):
         for cell in row:
             cell.border = Border(left=Side(style='thin'), right=Side(style='thin'), top=Side(style='thin'), bottom=Side(style='thin'))
-            if cell.column == 6 and cell.value != time_column_name:
+            if cell.column == 6 and cell.value not in (time_column_name, "Finals"):
                 cell.font = big_font
             if cell.row > 1 and cell.column == 1 and cell.value == "EXTRA":
                 cell.fill = yellow_fill
 
     # Save the output table
     wb.save(filename)
+
+def restore_final_column(output_table: pd.DataFrame):
+    for idx in range(len(output_table)):
+        row = output_table.iloc[idx]
+        cell = row.iloc[0]
+        # Skip non event header rows
+        if not cell.startswith("Event"):
+            continue
+
+        # Skip non finals events
+        if not is_final(get_event_name(cell)):
+            continue
+        
+        # Change the time column name to "Finals"
+        output_table.iloc[idx + 1, TIME_COLUMN_INDEX] = "Finals"
 
 def leahify_qualifiers(
         sfile: str,
@@ -304,10 +319,15 @@ def leahify_qualifiers(
 
     # Extract tables from Leah's version
     leah_tables, full_events, _ = get_leah_tables(lfile, None)
-    events = [get_event_name(event) for event in full_events]
 
     # Get time column name in Leah's table
     time_column_name = leah_tables[0].columns[TIME_COLUMN_INDEX]
+
+    # Change the "Finals" column name to the time column name in Leah's tables
+    rename_final_column(leah_tables, time_column_name)
+
+    # Get event names from Leah's tables
+    events = [get_event_name(event) for event in full_events]
 
     # For each swimmer in Leah's version, find the corresponding time in Sammy's version
     matched_events = match_swimmers(qualifiers_table, leah_tables, events, time_column_name, user_input_callback)
@@ -320,6 +340,9 @@ def leahify_qualifiers(
 
     # Combine all tables into a single output table
     output_table = combine_tables(leah_tables_with_extras, time_column_name)
+
+    # Change back the time column name to "Finals" for finals only using the output table
+    restore_final_column(output_table)
 
     # Save the output table to an Excel file
     save_output_table_to_excel(output_table, output_path, time_column_name)

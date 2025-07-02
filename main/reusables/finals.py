@@ -21,3 +21,8 @@ def is_final(event_name: str) -> bool:
     Check if the event is a final.
     '''
     return event_name not in MAIN_EVENTS
+
+def rename_final_column(leah_tables, time_column_name: str):
+    for table in leah_tables:
+        if "Finals" in table.columns:
+            table.rename(columns={"Finals": time_column_name}, inplace=True)
