@@ -20,3 +20,6 @@ dist/
 
 # Example directories
 example*/
+
+# Instructions file
+INSTRUCTIONS.docx
