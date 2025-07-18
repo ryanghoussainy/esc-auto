@@ -9,9 +9,10 @@ def main():
         try:
             from gui_app import main as gui_main
             gui_main()
-        except ImportError:
+        except ImportError as e:
             print("GUI dependencies not installed. Install with: pip install -r requirements.txt")
             print("Or use command line with arguments 1, 2, or 3.")
+            print(e)
         return
     
     if len(sys.argv) != 2 or sys.argv[1] not in ['1', '2', '3']:

@@ -5,7 +5,7 @@ import os
 import threading
 import sys
 import re
-from PIL import Image, ImageTk  # Add this import for image handling
+from PIL import Image, ImageTk
 
 from leahify_qualifiers import leahify_qualifiers
 from check_qualifiers import check_qualifiers
@@ -107,6 +107,15 @@ class SwimmingResultsApp:
         }
         
         self.setup_ui()
+
+    def resource_path(self, relative_path):
+        """Get absolute path to resource, works for development and PyInstaller"""
+        try:
+            base_path = sys._MEIPASS  # For PyInstaller
+        except AttributeError:
+            base_path = os.path.abspath(".")
+
+        return os.path.join(base_path, relative_path)
         
     def setup_ui(self):
         # Main title with logo
@@ -116,7 +125,7 @@ class SwimmingResultsApp:
         # Try to load and display logo
         try:
             # Load logo
-            logo_path = os.path.join(os.path.dirname(__file__), "..\\images\\esc-logo.png")
+            logo_path = self.resource_path("images/esc-logo.png")
             if os.path.exists(logo_path):
                 logo = Image.open(logo_path)
                 # Resize logo
