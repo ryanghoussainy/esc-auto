@@ -154,6 +154,7 @@ class SwimmingResultsApp:
         # Configure modern button style
         style.configure(
             'Modern.TButton',
+            background=CONTAINER_BACKGROUND,
             font=('Segoe UI', 12),
         )
         
