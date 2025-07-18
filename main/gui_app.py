@@ -494,13 +494,11 @@ class SwimmingResultsApp:
         button_frame = tk.Frame(container, bg=CONTAINER_BACKGROUND)
         button_frame.pack(fill=tk.X, padx=10, pady=5)
         
-        browse_btn = tk.Button(
+        browse_btn = ttk.Button(
             button_frame,
             text="Choose Location",
             command=lambda: self.browse_output_file(key, filetypes),
-            bg=BUTTON_BROWSE_BG,
-            fg=BUTTON_BROWSE_FG,
-            font=("Arial", 11)
+            style="Modern.TButton",
         )
         browse_btn.pack(side=tk.LEFT, padx=(0, 10))
         
