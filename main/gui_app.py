@@ -9,6 +9,7 @@ import re
 from leahify_qualifiers import leahify_qualifiers
 from check_qualifiers import check_qualifiers
 from check_finals import check_finals
+from colours import *
 
 class OutputCapture:
     """Context manager to capture print statements and user input"""
@@ -90,7 +91,7 @@ class SwimmingResultsApp:
         self.root = root
         self.root.title("House Champs Times")
         self.root.geometry("1200x800")
-        self.root.configure(bg='#f8f9fa')
+        self.root.configure(bg=APP_BACKGROUND)
 
         # Setup modern styles
         self.setup_modern_styles()
@@ -112,8 +113,8 @@ class SwimmingResultsApp:
             self.root, 
             text="House Champs Times", 
             font=("Segoe UI", 18, "bold"),
-            bg='#f8f9fa',
-            fg='#212529',
+            bg=APP_BACKGROUND,
+            fg=APP_FOREGROUND,
         )
         title_label.pack()
         
@@ -160,14 +161,14 @@ class SwimmingResultsApp:
         # Configure modern frame style
         style.configure(
             'Modern.TFrame',
-            background='#ffffff',
+            background=FRAME_BACKGROUND,
             relief='flat'
         )
         
         # Configure modern notebook style
         style.configure(
             'Modern.TNotebook',
-            background='#f8f9fa',
+            background=NOTEBOOK_BACKGROUND,
             borderwidth=0
         )
         style.configure(
@@ -185,21 +186,21 @@ class SwimmingResultsApp:
             width=50,
             height=20,
             font=("JetBrains Mono", 10),
-            bg='#1e1e1e',
-            fg='#d4d4d4',
+            bg=OUTPUT_BACKGROUND,
+            fg=OUTPUT_FOREGROUND,
             state='disabled',
             borderwidth=0,
             highlightthickness=1,
-            highlightcolor='#0078d4',
-            insertbackground='#d4d4d4',
+            highlightcolor=OUTPUT_HIGHLIGHT,
+            insertbackground=OUTPUT_CURSOR,
             relief='flat'
         )
         self.output_text.pack(expand=True, fill='both', pady=(0, 20), padx=10)
         
         # Configure modern color tags
-        self.output_text.tag_configure("red", foreground="#ff6b6b")
-        self.output_text.tag_configure("yellow", foreground="#ffd93d")
-        self.output_text.tag_configure("green", foreground="#6bcf7f")
+        self.output_text.tag_configure("red", foreground=TEXT_RED)
+        self.output_text.tag_configure("yellow", foreground=TEXT_YELLOW)
+        self.output_text.tag_configure("green", foreground=TEXT_GREEN)
     
     def clear_output(self):
         self.output_text.config(state='normal')
@@ -316,8 +317,8 @@ class SwimmingResultsApp:
             button_frame,
             text="Accept Match",
             command=accept,
-            bg="#27ae60",
-            fg="white",
+            bg=BUTTON_ACCEPT_BG,
+            fg=BUTTON_ACCEPT_FG,
             font=("Segoe UI", 10, "bold"),
             padx=20,
             pady=8
@@ -329,8 +330,8 @@ class SwimmingResultsApp:
             button_frame,
             text="Deny Match",
             command=deny,
-            bg="#e74c3c",
-            fg="white",
+            bg=BUTTON_DENY_BG,
+            fg=BUTTON_DENY_FG,
             font=("Segoe UI", 10, "bold"),
             padx=20,
             pady=8
@@ -362,8 +363,8 @@ class SwimmingResultsApp:
             frame,
             text="Convert Sammy's qualifier format to Leah's format",
             font=("Segoe UI", 12),
-            bg="#ffffff",
-            fg="#6c757d",
+            bg=LABEL_BACKGROUND,
+            fg=LABEL_FOREGROUND,
             wraplength=400
         )
         instructions.pack(pady=20)
@@ -393,8 +394,8 @@ class SwimmingResultsApp:
             frame,
             text="Check the generated qualifiers against heat results PDF",
             font=("Segoe UI", 12),
-            bg="#ffffff",
-            fg="#6c757d",
+            bg=LABEL_BACKGROUND,
+            fg=LABEL_FOREGROUND,
             wraplength=400
         )
         instructions.pack(pady=20)
@@ -421,8 +422,8 @@ class SwimmingResultsApp:
             frame,
             text="Check finals results against full results PDF",
             font=("Segoe UI", 12),
-            bg="#ffffff",
-            fg="#6c757d",
+            bg=LABEL_BACKGROUND,
+            fg=LABEL_FOREGROUND,
             wraplength=400
         )
         instructions.pack(pady=20)
@@ -442,30 +443,30 @@ class SwimmingResultsApp:
     
     def create_file_input(self, parent, label_text, key, filetypes):
         # Container frame
-        container = tk.Frame(parent, bg='white', relief=tk.RAISED, bd=1)
+        container = tk.Frame(parent, bg=CONTAINER_BACKGROUND, relief=tk.RAISED, bd=1)
         container.pack(fill=tk.X, padx=10, pady=10)
         
         # Label
-        label = tk.Label(container, text=label_text, font=("Arial", 10, "bold"), bg='white')
+        label = tk.Label(container, text=label_text, font=("Arial", 10, "bold"), bg=CONTAINER_BACKGROUND)
         label.pack(anchor=tk.W, padx=10, pady=(10, 5))
         
         # Drop area
-        drop_frame = tk.Frame(container, bg='#ecf0f1', height=60, relief=tk.SUNKEN, bd=2)
+        drop_frame = tk.Frame(container, bg=DROP_AREA_DEFAULT_BG, height=60, relief=tk.SUNKEN, bd=2)
         drop_frame.pack(fill=tk.X, padx=10, pady=5)
         drop_frame.pack_propagate(False)
         
         drop_label = tk.Label(
             drop_frame,
             text="Drag & Drop file here or click to browse",
-            bg='#ecf0f1',
-            fg='#7f8c8d',
+            bg=DROP_AREA_DEFAULT_BG,
+            fg=DROP_AREA_DEFAULT_FG,
             font=("Arial", 9)
         )
         drop_label.pack(expand=True)
         
         # File path display
         path_var = tk.StringVar()
-        path_label = tk.Label(container, textvariable=path_var, bg='white', fg='#2c3e50', wraplength=400)
+        path_label = tk.Label(container, textvariable=path_var, bg=CONTAINER_BACKGROUND, fg=LABEL_TEXT_DARK, wraplength=400)
         path_label.pack(anchor=tk.W, padx=10, pady=(0, 10))
         
         # Store references
@@ -482,23 +483,23 @@ class SwimmingResultsApp:
 
     def create_output_file_input(self, parent, label_text, key, filetypes):
         # Container frame
-        container = tk.Frame(parent, bg='white', relief=tk.RAISED, bd=1)
+        container = tk.Frame(parent, bg=CONTAINER_BACKGROUND, relief=tk.RAISED, bd=1)
         container.pack(fill=tk.X, padx=10, pady=10)
         
         # Label
-        label = tk.Label(container, text=label_text, font=("Arial", 10, "bold"), bg='white')
+        label = tk.Label(container, text=label_text, font=("Arial", 10, "bold"), bg=CONTAINER_BACKGROUND)
         label.pack(anchor=tk.W, padx=10, pady=(10, 5))
         
         # Browse button and path display in same row
-        button_frame = tk.Frame(container, bg='white')
+        button_frame = tk.Frame(container, bg=CONTAINER_BACKGROUND)
         button_frame.pack(fill=tk.X, padx=10, pady=5)
         
         browse_btn = tk.Button(
             button_frame,
             text="Choose Location",
             command=lambda: self.browse_output_file(key, filetypes),
-            bg='#3498db',
-            fg='white',
+            bg=BUTTON_BROWSE_BG,
+            fg=BUTTON_BROWSE_FG,
             font=("Arial", 9)
         )
         browse_btn.pack(side=tk.LEFT, padx=(0, 10))
@@ -506,7 +507,7 @@ class SwimmingResultsApp:
         # File path display
         path_var = tk.StringVar()
         path_var.set("No location selected (will use default: output.xlsx)")
-        path_label = tk.Label(button_frame, textvariable=path_var, bg='white', fg='#2c3e50', wraplength=300)
+        path_label = tk.Label(button_frame, textvariable=path_var, bg=CONTAINER_BACKGROUND, fg=LABEL_TEXT_DARK, wraplength=300)
         path_label.pack(side=tk.LEFT, anchor=tk.W, pady=(0, 10))
         
         # Store references
@@ -543,10 +544,10 @@ class SwimmingResultsApp:
         
         # Update drop area appearance
         drop_frame = getattr(self, f'{key}_frame')
-        drop_frame.configure(bg='#d5f4e6')
+        drop_frame.configure(bg=DROP_AREA_SUCCESS_BG)
         for child in drop_frame.winfo_children():
             if isinstance(child, tk.Label):
-                child.configure(bg='#d5f4e6', fg='#27ae60', text="✓ File loaded")
+                child.configure(bg=DROP_AREA_SUCCESS_BG, fg=DROP_AREA_SUCCESS_FG, text="✓ File loaded")
     
     def run_leahify(self):
         if not self.file_paths['sammy_qualifiers'] or not self.file_paths['leah_template']:
