@@ -4,4 +4,4 @@ fuzzywuzzy
 pypdf
 tkinterdnd2
 xlrd
-PIL
+Pillow
