@@ -46,37 +46,37 @@ class OutputCapture:
                 return
                 
             self.output_widget.config(state='normal')
-            self._insert_colored_text(text)
+            self._insert_coloured_text(text)
             self.output_widget.see(tk.END)
             self.output_widget.config(state='disabled')
         except tk.TclError:
             pass  # Widget destroyed or not accessible
     
-    def _insert_colored_text(self, text):
-        """Insert text with color support by parsing ANSI escape codes"""
-        # ANSI color code pattern
+    def _insert_coloured_text(self, text):
+        """Insert text with colour support by parsing ANSI escape codes"""
+        # ANSI colour code pattern
         ansi_pattern = r'\033\[(\d+)m'
         
         # Split text by ANSI codes
         parts = re.split(ansi_pattern, text)
         
-        current_color = None
+        current_colour = None
         for i, part in enumerate(parts):
             if i % 2 == 0:  # Text part
-                if current_color:
-                    self.output_widget.insert(tk.END, part, current_color)
+                if current_colour:
+                    self.output_widget.insert(tk.END, part, current_colour)
                 else:
                     self.output_widget.insert(tk.END, part)
-            else:  # Color code part
-                color_code = int(part)
-                if color_code == 91:  # Red
-                    current_color = "red"
-                elif color_code == 93:  # Yellow
-                    current_color = "yellow"
-                elif color_code == 92:  # Green
-                    current_color = "green"
-                elif color_code == 0:  # Reset
-                    current_color = None
+            else:  # colour code part
+                colour_code = int(part)
+                if colour_code == 91:  # Red
+                    current_colour = "red"
+                elif colour_code == 93:  # Yellow
+                    current_colour = "yellow"
+                elif colour_code == 92:  # Green
+                    current_colour = "green"
+                elif colour_code == 0:  # Reset
+                    current_colour = None
         
     def flush(self):
         pass
@@ -114,7 +114,7 @@ class SwimmingResultsApp:
             text="House Champs Times", 
             font=("Segoe UI", 18, "bold"),
             bg=APP_BACKGROUND,
-            fg=APP_FOREGROUND,
+            fg=APP_TITLE,
         )
         title_label.pack()
         
@@ -123,16 +123,16 @@ class SwimmingResultsApp:
         main_paned.pack(expand=True, fill='both', padx=30, pady=20)
         
         # Left side - Controls
-        left_frame = ttk.Frame(main_paned)
+        left_frame = tk.Frame(main_paned, bg=FRAME_BACKGROUND)
         main_paned.add(left_frame, weight=1)
         
         # Right side - Output
-        right_frame = ttk.Frame(main_paned)
+        right_frame = tk.Frame(main_paned, bg=FRAME_BACKGROUND)
         main_paned.add(right_frame, weight=1)
         
         # Create notebook for tabs on left side
         self.notebook = ttk.Notebook(left_frame, style="Modern.TNotebook")
-        self.notebook.pack(expand=True, fill='both', padx=10, pady=10)
+        self.notebook.pack(expand=True, fill='both', padx=10, pady=20)
         
         # Tab 1: Leahify Qualifiers
         self.create_leahify_tab()
@@ -154,7 +154,7 @@ class SwimmingResultsApp:
         # Configure modern button style
         style.configure(
             'Modern.TButton',
-            font=('Segoe UI', 10),
+            font=('Segoe UI', 12),
             padding=(20, 10)
         )
         
@@ -174,7 +174,7 @@ class SwimmingResultsApp:
         style.configure(
             'Modern.TNotebook.Tab',
             padding=(20, 10),
-            font=('Segoe UI', 10)
+            font=('Segoe UI', 12)
         )
     
     
@@ -185,7 +185,7 @@ class SwimmingResultsApp:
             wrap=tk.WORD,
             width=50,
             height=20,
-            font=("JetBrains Mono", 10),
+            font=("JetBrains Mono", 12),
             bg=OUTPUT_BACKGROUND,
             fg=OUTPUT_FOREGROUND,
             state='disabled',
@@ -197,7 +197,7 @@ class SwimmingResultsApp:
         )
         self.output_text.pack(expand=True, fill='both', pady=(0, 20), padx=10)
         
-        # Configure modern color tags
+        # Configure modern colour tags
         self.output_text.tag_configure("red", foreground=TEXT_RED)
         self.output_text.tag_configure("yellow", foreground=TEXT_YELLOW)
         self.output_text.tag_configure("green", foreground=TEXT_GREEN)
@@ -355,7 +355,7 @@ class SwimmingResultsApp:
         self.output_text.config(state='disabled')
     
     def create_leahify_tab(self):
-        frame = ttk.Frame(self.notebook)
+        frame = tk.Frame(self.notebook, bg=NOTEBOOK_TAB_BACKGROUND)
         self.notebook.add(frame, text="1. Leahify Qualifiers")
         
         # Instructions
@@ -386,7 +386,7 @@ class SwimmingResultsApp:
         process_btn.pack(pady=30)
     
     def create_check_qualifiers_tab(self):
-        frame = ttk.Frame(self.notebook)
+        frame = tk.Frame(self.notebook, bg=NOTEBOOK_TAB_BACKGROUND)
         self.notebook.add(frame, text="2. Check Qualifiers")
         
         # Instructions
@@ -414,7 +414,7 @@ class SwimmingResultsApp:
         process_btn.pack(pady=30)
     
     def create_check_finals_tab(self):
-        frame = ttk.Frame(self.notebook)
+        frame = tk.Frame(self.notebook, bg=NOTEBOOK_TAB_BACKGROUND)
         self.notebook.add(frame, text="3. Check Finals")
         
         # Instructions
@@ -460,7 +460,7 @@ class SwimmingResultsApp:
             text="Drag & Drop file here or click to browse",
             bg=DROP_AREA_DEFAULT_BG,
             fg=DROP_AREA_DEFAULT_FG,
-            font=("Arial", 9)
+            font=("Arial", 11, "italic"),
         )
         drop_label.pack(expand=True)
         
@@ -500,7 +500,7 @@ class SwimmingResultsApp:
             command=lambda: self.browse_output_file(key, filetypes),
             bg=BUTTON_BROWSE_BG,
             fg=BUTTON_BROWSE_FG,
-            font=("Arial", 9)
+            font=("Arial", 11)
         )
         browse_btn.pack(side=tk.LEFT, padx=(0, 10))
         
