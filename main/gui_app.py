@@ -155,7 +155,6 @@ class SwimmingResultsApp:
         style.configure(
             'Modern.TButton',
             font=('Segoe UI', 12),
-            padding=(20, 10)
         )
         
         # Configure modern frame style
