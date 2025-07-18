@@ -5,6 +5,7 @@ import os
 import threading
 import sys
 import re
+from PIL import Image, ImageTk  # Add this import for image handling
 
 from leahify_qualifiers import leahify_qualifiers
 from check_qualifiers import check_qualifiers
@@ -89,7 +90,7 @@ class OutputCapture:
 class SwimmingResultsApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("House Champs Times")
+        self.root.title("Auto House Champs")
         self.root.geometry("1200x800")
         self.root.configure(bg=APP_BACKGROUND)
 
@@ -108,15 +109,39 @@ class SwimmingResultsApp:
         self.setup_ui()
         
     def setup_ui(self):
-        # Main title
+        # Main title with logo
+        title_frame = tk.Frame(self.root, bg=APP_BACKGROUND)
+        title_frame.pack(pady=(10, 0))
+
+        # Try to load and display logo
+        try:
+            # Load logo
+            logo_path = os.path.join(os.path.dirname(__file__), "..\\images\\esc-logo.png")
+            if os.path.exists(logo_path):
+                logo = Image.open(logo_path)
+                # Resize logo
+                logo = logo.resize((48, 48), Image.Resampling.LANCZOS)
+                self.title_image = ImageTk.PhotoImage(logo)
+
+                # Image label
+                image_label = tk.Label(
+                    title_frame,
+                    image=self.title_image,
+                    bg=APP_BACKGROUND
+                )
+                image_label.pack(side=tk.LEFT, padx=(0, 15))
+        except Exception as e:
+            print(f"Could not load logo: {e}")
+
+        # Title label
         title_label = tk.Label(
-            self.root, 
-            text="House Champs Times", 
+            title_frame, 
+            text="Auto House Champs", 
             font=("Segoe UI", 18, "bold"),
             bg=APP_BACKGROUND,
             fg=APP_TITLE,
         )
-        title_label.pack()
+        title_label.pack(side=tk.LEFT)
         
         # Create main container with paned window
         main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL, style="Modern.TFrame")
