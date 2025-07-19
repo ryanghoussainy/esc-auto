@@ -1,3 +1,5 @@
+__version__ = "1.0.0" # Major.Minor.Patch
+
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 import tkinterdnd2 as tkdnd
@@ -118,6 +120,16 @@ class SwimmingResultsApp:
         return os.path.join(base_path, relative_path)
         
     def setup_ui(self):
+        # Version label in top left corner
+        # version_label = tk.Label(
+        #     self.root, 
+        #     text=f"Version {__version__}", 
+        #     font=("Segoe UI", 10), 
+        #     bg=APP_BACKGROUND, 
+        #     fg=APP_TITLE
+        # )
+        # version_label.pack(side=tk.TOP, anchor=tk.NW)
+
         # Main title with logo
         title_frame = tk.Frame(self.root, bg=APP_BACKGROUND)
         title_frame.pack(pady=(10, 0))
@@ -151,6 +163,16 @@ class SwimmingResultsApp:
             fg=APP_TITLE,
         )
         title_label.pack(side=tk.LEFT)
+
+        # Add version label
+        version_label = tk.Label(
+            title_frame,
+            text=f"Version {__version__}",
+            font=("Segoe UI", 10),
+            bg=APP_BACKGROUND,
+            fg=APP_TITLE,
+        )
+        version_label.pack(side=tk.RIGHT, padx=(0, 20))
         
         # Create main container with paned window
         main_paned = ttk.PanedWindow(self.root, orient=tk.HORIZONTAL, style="Modern.TFrame")
