@@ -26,7 +26,7 @@ jobs:
         
     - name: Build executable
       run: |
-        pyinstaller --onefile --windowed --name "Auto House Champs" main/launch_gui.py
+        pyinstaller --onefile --noconsole --name "Auto House Champs" main/launch_gui.py
         
     - name: Upload Mac executable
       uses: actions/upload-artifact@v4
