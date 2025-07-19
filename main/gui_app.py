@@ -120,16 +120,6 @@ class SwimmingResultsApp:
         return os.path.join(base_path, relative_path)
         
     def setup_ui(self):
-        # Version label in top left corner
-        # version_label = tk.Label(
-        #     self.root, 
-        #     text=f"Version {__version__}", 
-        #     font=("Segoe UI", 10), 
-        #     bg=APP_BACKGROUND, 
-        #     fg=APP_TITLE
-        # )
-        # version_label.pack(side=tk.TOP, anchor=tk.NW)
-
         # Main title with logo
         title_frame = tk.Frame(self.root, bg=APP_BACKGROUND)
         title_frame.pack(pady=(10, 0))
