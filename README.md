@@ -1,4 +1,4 @@
-# Auto House Champs
+# Auto House Champs - Ealing Swimming Club
 
 ## Description
 Tkinter Python app which does 3 things:
