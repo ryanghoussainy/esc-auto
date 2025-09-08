@@ -1,6 +1,6 @@
 import pandas as pd
-from reusables import print_discrepancies, TIME_DISCREPANCY, SWIMMER_NOT_FOUND_DISCREPANCY
 from reusables import match_swimmer, parse_name, normalise_time, read_pdf
+from discrepancies import print_discrepancies, TimeDiscrepancy, SwimmerNotFound
 
 def get_finals_tables(finals_file):
     """
@@ -110,7 +110,7 @@ def check_finals(finals_file, pdf_file, user_input_callback=None):
                 pdf_qualifier_time_normalised = normalise_time(pdf_qualifier_time)
                 
                 if pdf_qualifier_time_normalised != finals_qualifier_time_normalised:
-                    discrepancies.append((TIME_DISCREPANCY, full_name, event_name, pdf_qualifier_time, finals_qualifier_time))
+                    discrepancies.append(TimeDiscrepancy(full_name, event_name, pdf_qualifier_time, finals_qualifier_time))
                 
                 # Compare finals times
                 finals_finals_time = swimmer.iloc[0][event_name]
@@ -124,13 +124,13 @@ def check_finals(finals_file, pdf_file, user_input_callback=None):
                 pdf_finals_time_normalised = normalise_time(pdf_finals_time)
 
                 if pdf_finals_time_normalised != finals_finals_time_normalised:
-                    discrepancies.append((TIME_DISCREPANCY, full_name, event_name, pdf_finals_time, finals_finals_time))
+                    discrepancies.append(TimeDiscrepancy(full_name, event_name, pdf_finals_time, finals_finals_time))
                 
                 # SUCCESSFUL MATCH
             else:
                 # If no swimmer was found, we have a discrepancy
                 # We don't have the swimmer's name in Sammy's format so we use the pdf name.
-                discrepancies.append((SWIMMER_NOT_FOUND_DISCREPANCY, pdf_name, event_name, pdf_finals_time, ""))
+                discrepancies.append(SwimmerNotFound(pdf_name))
 
     # Print discrepancies
     print_discrepancies(discrepancies, isQualifiers=False)

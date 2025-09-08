@@ -1,7 +1,7 @@
 import pandas as pd
 from leahify_qualifiers import get_leah_tables, TIME_COLUMN_INDEX
-from reusables import print_discrepancies, TIME_DISCREPANCY, SWIMMER_NOT_FOUND_DISCREPANCY
 from reusables import match_swimmer, get_event_name, parse_name, normalise_time, read_pdf, rename_final_column
+from discrepancies import print_discrepancies, TimeDiscrepancy, SwimmerNotFound
 
 
 def clean_name(name):
@@ -88,7 +88,7 @@ def check_qualifiers(output_table_path, pdf_path, user_input_callback=None):
                     leah_time_normalised = normalise_time(time)
 
                     if pdf_time_normalised != leah_time_normalised:
-                        discrepancies.append((TIME_DISCREPANCY, name, event_name, matched_pdf_row['Time'].values[0], time))
+                        discrepancies.append(TimeDiscrepancy(name, event_name, matched_pdf_row['Time'].values[0], time))
 
                     # SUCCESSFUL MATCH
                     # Remove matched row from pdf table
@@ -96,9 +96,9 @@ def check_qualifiers(output_table_path, pdf_path, user_input_callback=None):
 
                 # If the swimmer is not found in the PDF results
                 else:
-                    discrepancies.append((SWIMMER_NOT_FOUND_DISCREPANCY, name, event_name, "", "")) 
+                    discrepancies.append(SwimmerNotFound(name))
             else:
-                discrepancies.append((SWIMMER_NOT_FOUND_DISCREPANCY, name, event_name, "", ""))
+                discrepancies.append(SwimmerNotFound(name))
 
         # Reset indexes of the table
         pdf_table.reset_index(drop=True, inplace=True)
@@ -150,15 +150,15 @@ def check_qualifiers(output_table_path, pdf_path, user_input_callback=None):
                 pdf_time_normalised = normalise_time(pdf_time)
                 leah_time_normalised = normalise_time(leah_time)
                 if pdf_time_normalised != leah_time_normalised:
-                    discrepancies.append((TIME_DISCREPANCY, full_name, event_name, pdf_time, leah_time))
-                
+                    discrepancies.append(TimeDiscrepancy(full_name, event_name, pdf_time, leah_time))
+
                 # SUCCESSFUL MATCH
                 # Remove matched row from pdf table
                 pdf_table.drop(pdf_row.name, inplace=True)
             else:
                 # If we didn't find a swimmer, we have a mismatch
                 # We don't know the name of the swimmer, so we just use the PDF name
-                discrepancies.append((SWIMMER_NOT_FOUND_DISCREPANCY, pdf_name, event_name, pdf_time, ""))
+                discrepancies.append(SwimmerNotFound(pdf_name))
         # If there are any swimmers left in the pdf table, they are extra rows
         # We can just add them to the leah_extra_rows DataFrame
         if not pdf_table.empty:
