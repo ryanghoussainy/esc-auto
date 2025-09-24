@@ -2,7 +2,6 @@ __version__ = "1.0.0" # Major.Minor.Patch
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
-import tkinterdnd2 as tkdnd
 import os
 import threading
 import sys
@@ -496,19 +495,14 @@ class SwimmingResultsApp:
         label = tk.Label(container, text=label_text, font=("Arial", 10, "bold"), bg=CONTAINER_BACKGROUND)
         label.pack(anchor=tk.W, padx=10, pady=(10, 5))
         
-        # Drop area
-        drop_frame = tk.Frame(container, bg=DROP_AREA_DEFAULT_BG, height=60, relief=tk.SUNKEN, bd=2)
-        drop_frame.pack(fill=tk.X, padx=10, pady=5)
-        drop_frame.pack_propagate(False)
-        
-        drop_label = tk.Label(
-            drop_frame,
-            text="Drag & Drop file here or click to browse",
-            bg=DROP_AREA_DEFAULT_BG,
-            fg=DROP_AREA_DEFAULT_FG,
-            font=("Arial", 11, "italic"),
+        # Browse button
+        browse_btn = ttk.Button(
+            container,
+            text=f"Browse for {label_text}",
+            command=lambda: self.browse_file(key, filetypes),
+            style="Modern.TButton",
         )
-        drop_label.pack(expand=True)
+        browse_btn.pack(pady=10)
         
         # File path display
         path_var = tk.StringVar()
@@ -517,15 +511,6 @@ class SwimmingResultsApp:
         
         # Store references
         setattr(self, f'{key}_var', path_var)
-        setattr(self, f'{key}_frame', drop_frame)
-        
-        # Bind click event
-        drop_frame.bind("<Button-1>", lambda e: self.browse_file(key, filetypes))
-        drop_label.bind("<Button-1>", lambda e: self.browse_file(key, filetypes))
-        
-        # Enable drag and drop
-        drop_frame.drop_target_register(tkdnd.DND_FILES)
-        drop_frame.dnd_bind('<<Drop>>', lambda e: self.handle_drop(e, key))
 
     def create_output_file_input(self, parent, label_text, key, filetypes):
         # Container frame
@@ -576,23 +561,11 @@ class SwimmingResultsApp:
         if filename:
             self.set_file_path(key, filename)
     
-    def handle_drop(self, event, key):
-        files = self.root.tk.splitlist(event.data)
-        if files:
-            self.set_file_path(key, files[0])
-    
     def set_file_path(self, key, path):
         self.file_paths[key] = path
         path_var = getattr(self, f'{key}_var')
         path_var.set(f"Selected: {os.path.basename(path)}")
         
-        # Update drop area appearance
-        drop_frame = getattr(self, f'{key}_frame')
-        drop_frame.configure(bg=DROP_AREA_SUCCESS_BG)
-        for child in drop_frame.winfo_children():
-            if isinstance(child, tk.Label):
-                child.configure(bg=DROP_AREA_SUCCESS_BG, fg=DROP_AREA_SUCCESS_FG, text="✓ File loaded")
-    
     def run_leahify(self):
         if not self.file_paths['sammy_qualifiers'] or not self.file_paths['leah_template']:
             messagebox.showerror("Error", "Please select both required files")
@@ -662,7 +635,7 @@ class SwimmingResultsApp:
         threading.Thread(target=process, daemon=True).start()
 
 def main():
-    root = tkdnd.TkinterDnD.Tk()
+    root = tk.Tk()
     app = SwimmingResultsApp(root)
     root.mainloop()
 

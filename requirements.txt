@@ -2,7 +2,6 @@ pandas
 openpyxl
 fuzzywuzzy
 pypdf
-tkinterdnd2
 xlrd
 Pillow
 python-Levenshtein
