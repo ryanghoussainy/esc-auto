@@ -196,13 +196,6 @@ class SwimmingResultsApp:
         # Configure modern ttk styles
         style = ttk.Style()
         
-        # Configure modern button style
-        style.configure(
-            'Modern.TButton',
-            background=CONTAINER_BACKGROUND,
-            font=('Segoe UI', 12),
-        )
-        
         # Configure modern frame style
         style.configure(
             'Modern.TFrame',
@@ -212,9 +205,7 @@ class SwimmingResultsApp:
         
         # Configure modern notebook style
         style.configure(
-            'Modern.TNotebook',
-            background=NOTEBOOK_BACKGROUND,
-            borderwidth=0
+            'Modern.TNotebook'
         )
         style.configure(
             'Modern.TNotebook.Tab',
@@ -288,8 +279,7 @@ class SwimmingResultsApp:
         # Extract swimmer names from the message for a cleaner dialog
         if "->" in message:
             # Parse the swimmer match info
-            match_info = re.sub(r'\033\[\d+m', '', message).strip()
-            dialog_message = f"Confirm swimmer match:\n\n{match_info}"
+            dialog_message = re.sub(r'\033\[\d+m', '', message).strip()
         else:
             dialog_message = message
     
@@ -362,8 +352,6 @@ class SwimmingResultsApp:
             button_frame,
             text="Accept Match",
             command=accept,
-            bg=BUTTON_ACCEPT_BG,
-            fg=BUTTON_ACCEPT_FG,
             font=("Segoe UI", 10, "bold"),
             padx=20,
             pady=8
@@ -375,8 +363,6 @@ class SwimmingResultsApp:
             button_frame,
             text="Deny Match",
             command=deny,
-            bg=BUTTON_DENY_BG,
-            fg=BUTTON_DENY_FG,
             font=("Segoe UI", 10, "bold"),
             padx=20,
             pady=8
@@ -408,9 +394,9 @@ class SwimmingResultsApp:
             frame,
             text="Convert Sammy's qualifier format to Leah's format",
             font=("Segoe UI", 12),
-            bg=LABEL_BACKGROUND,
             fg=LABEL_FOREGROUND,
-            wraplength=400
+            bg=NOTEBOOK_TAB_BACKGROUND,
+            wraplength=500
         )
         instructions.pack(pady=20)
         
@@ -419,14 +405,13 @@ class SwimmingResultsApp:
         self.create_file_input(frame, "Leah's Template EXCEL", 'leah_template', [('Excel files', '*.xls *.xlsx')])
 
         # Output file selection
-        self.create_output_file_input(frame, "Output EXCEL", 'output_file', [('Excel files', '*.xls *.xlsx')])
+        self.create_output_file_input(frame, "Output EXCEL", 'output_file', [('Excel files', '*.xlsx')])
         
         # Process button
-        process_btn = ttk.Button(
+        process_btn = tk.Button(
             frame,
             text="Process Files",
             command=self.run_leahify,
-            style="Modern.TButton",
         )
         process_btn.pack(pady=30)
     
@@ -439,9 +424,9 @@ class SwimmingResultsApp:
             frame,
             text="Check the generated qualifiers against heat results PDF",
             font=("Segoe UI", 12),
-            bg=LABEL_BACKGROUND,
             fg=LABEL_FOREGROUND,
-            wraplength=400
+            bg=NOTEBOOK_TAB_BACKGROUND,
+            wraplength=500
         )
         instructions.pack(pady=20)
         
@@ -450,11 +435,10 @@ class SwimmingResultsApp:
         self.create_file_input(frame, "Heat Results PDF", 'heat_results_pdf', [('PDF files', '*.pdf')])
         
         # Process button
-        process_btn = ttk.Button(
+        process_btn = tk.Button(
             frame,
             text="Check Files",
             command=self.run_check_qualifiers,
-            style="Modern.TButton",
         )
         process_btn.pack(pady=30)
     
@@ -467,9 +451,9 @@ class SwimmingResultsApp:
             frame,
             text="Check finals results against full results PDF",
             font=("Segoe UI", 12),
-            bg=LABEL_BACKGROUND,
             fg=LABEL_FOREGROUND,
-            wraplength=400
+            bg=NOTEBOOK_TAB_BACKGROUND,
+            wraplength=500
         )
         instructions.pack(pady=20)
         
@@ -478,35 +462,33 @@ class SwimmingResultsApp:
         self.create_file_input(frame, "Full Results PDF", 'full_results_pdf', [('PDF files', '*.pdf')])
         
         # Process button
-        process_btn = ttk.Button(
+        process_btn = tk.Button(
             frame,
             text="Check Finals",
             command=self.run_check_finals,
-            style="Modern.TButton",
         )
         process_btn.pack(pady=30)
     
     def create_file_input(self, parent, label_text, key, filetypes):
         # Container frame
-        container = tk.Frame(parent, bg=CONTAINER_BACKGROUND, relief=tk.RAISED, bd=1)
+        container = tk.Frame(parent, relief=tk.RAISED, bd=1)
         container.pack(fill=tk.X, padx=10, pady=10)
         
         # Label
-        label = tk.Label(container, text=label_text, font=("Arial", 10, "bold"), bg=CONTAINER_BACKGROUND)
+        label = tk.Label(container, text=label_text, font=("Arial", 10, "bold"))
         label.pack(anchor=tk.W, padx=10, pady=(10, 5))
         
         # Browse button
-        browse_btn = ttk.Button(
+        browse_btn = tk.Button(
             container,
-            text=f"Browse for {label_text}",
+            text=f"Browse",
             command=lambda: self.browse_file(key, filetypes),
-            style="Modern.TButton",
         )
         browse_btn.pack(pady=10)
         
         # File path display
         path_var = tk.StringVar()
-        path_label = tk.Label(container, textvariable=path_var, bg=CONTAINER_BACKGROUND, fg=LABEL_TEXT_DARK, wraplength=400)
+        path_label = tk.Label(container, textvariable=path_var, fg=FILE_PATH_FG, wraplength=400, font=("Segoe UI", 10, 'italic'))
         path_label.pack(anchor=tk.W, padx=10, pady=(0, 10))
         
         # Store references
@@ -514,29 +496,28 @@ class SwimmingResultsApp:
 
     def create_output_file_input(self, parent, label_text, key, filetypes):
         # Container frame
-        container = tk.Frame(parent, bg=CONTAINER_BACKGROUND, relief=tk.RAISED, bd=1)
+        container = tk.Frame(parent, relief=tk.RAISED, bd=1)
         container.pack(fill=tk.X, padx=10, pady=10)
         
         # Label
-        label = tk.Label(container, text=label_text, font=("Arial", 10, "bold"), bg=CONTAINER_BACKGROUND)
+        label = tk.Label(container, text=label_text, font=("Arial", 10, "bold"))
         label.pack(anchor=tk.W, padx=10, pady=(10, 5))
         
         # Browse button and path display in same row
-        button_frame = tk.Frame(container, bg=CONTAINER_BACKGROUND)
+        button_frame = tk.Frame(container)
         button_frame.pack(fill=tk.X, padx=10, pady=5)
-        
-        browse_btn = ttk.Button(
+
+        browse_btn = tk.Button(
             button_frame,
             text="Choose Location",
             command=lambda: self.browse_output_file(key, filetypes),
-            style="Modern.TButton",
         )
         browse_btn.pack(side=tk.LEFT, padx=(0, 10))
         
         # File path display
         path_var = tk.StringVar()
         path_var.set("No location selected (will use default: output.xlsx)")
-        path_label = tk.Label(button_frame, textvariable=path_var, bg=CONTAINER_BACKGROUND, fg=LABEL_TEXT_DARK, wraplength=300)
+        path_label = tk.Label(button_frame, textvariable=path_var, fg=LABEL_FOREGROUND, wraplength=400)
         path_label.pack(side=tk.LEFT, anchor=tk.W, pady=(0, 10))
         
         # Store references
