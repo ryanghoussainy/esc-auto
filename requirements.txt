@@ -5,3 +5,4 @@ pypdf
 xlrd
 Pillow
 python-Levenshtein
+tkmacosx

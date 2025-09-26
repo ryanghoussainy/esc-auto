@@ -2,6 +2,7 @@ __version__ = "1.0.0" # Major.Minor.Patch
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
+from tkmacosx import Button
 import os
 import threading
 import sys
@@ -348,7 +349,7 @@ class SwimmingResultsApp:
         dialog.protocol("WM_DELETE_WINDOW", on_close)
     
         # Accept button
-        accept_btn = tk.Button(
+        accept_btn = Button(
             button_frame,
             text="Accept Match",
             command=accept,
@@ -359,7 +360,7 @@ class SwimmingResultsApp:
         accept_btn.pack(side=tk.LEFT, padx=10)
     
         # Deny button
-        deny_btn = tk.Button(
+        deny_btn = Button(
             button_frame,
             text="Deny Match",
             command=deny,
@@ -408,10 +409,12 @@ class SwimmingResultsApp:
         self.create_output_file_input(frame, "Output EXCEL", 'output_file', [('Excel files', '*.xlsx')])
         
         # Process button
-        process_btn = tk.Button(
+        process_btn = Button(
             frame,
             text="Process Files",
             command=self.run_leahify,
+            highlightbackground=NOTEBOOK_TAB_BACKGROUND,
+            focusthickness=0,
         )
         process_btn.pack(pady=30)
     
@@ -435,10 +438,12 @@ class SwimmingResultsApp:
         self.create_file_input(frame, "Heat Results PDF", 'heat_results_pdf', [('PDF files', '*.pdf')])
         
         # Process button
-        process_btn = tk.Button(
+        process_btn = Button(
             frame,
-            text="Check Files",
+            text="Check Qualifiers",
             command=self.run_check_qualifiers,
+            highlightbackground=NOTEBOOK_TAB_BACKGROUND,
+            focusthickness=0,
         )
         process_btn.pack(pady=30)
     
@@ -462,10 +467,12 @@ class SwimmingResultsApp:
         self.create_file_input(frame, "Full Results PDF", 'full_results_pdf', [('PDF files', '*.pdf')])
         
         # Process button
-        process_btn = tk.Button(
+        process_btn = Button(
             frame,
             text="Check Finals",
             command=self.run_check_finals,
+            highlightbackground=NOTEBOOK_TAB_BACKGROUND,
+            focusthickness=0,
         )
         process_btn.pack(pady=30)
     
@@ -479,10 +486,12 @@ class SwimmingResultsApp:
         label.pack(anchor=tk.W, padx=10, pady=(10, 5))
         
         # Browse button
-        browse_btn = tk.Button(
+        browse_btn = Button(
             container,
             text=f"Browse",
             command=lambda: self.browse_file(key, filetypes),
+            highlightbackground=NOTEBOOK_TAB_BACKGROUND,
+            focusthickness=0,
         )
         browse_btn.pack(pady=10)
         
@@ -507,10 +516,12 @@ class SwimmingResultsApp:
         button_frame = tk.Frame(container)
         button_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        browse_btn = tk.Button(
+        browse_btn = Button(
             button_frame,
             text="Choose Location",
             command=lambda: self.browse_output_file(key, filetypes),
+            highlightbackground=NOTEBOOK_TAB_BACKGROUND,
+            focusthickness=0,
         )
         browse_btn.pack(side=tk.LEFT, padx=(0, 10))
         
