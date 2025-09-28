@@ -7,7 +7,7 @@ WHITE = 'white'
 BLACK = 'black'
 RED = '#ff6b6b'
 YELLOW = '#ffd93d'
-TEXT_GREEN = '#6bcf7f'
+GREEN = '#6bcf7f'
 
 # Main application colours
 APP_BACKGROUND = "#7eb9f4"

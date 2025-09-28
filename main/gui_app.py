@@ -6,7 +6,6 @@ from tkmacosx import Button
 import os
 import threading
 import sys
-import re
 from PIL import Image, ImageTk
 
 from leahify_qualifiers import leahify_qualifiers
