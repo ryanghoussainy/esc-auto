@@ -5,8 +5,8 @@ First, read leah's version, then for each swimmer in that sheet, find the corres
 time in Sammy's version and add it to the dictionary.
 '''
 
-from .extract_tables import extract_tables, print_tables, concat_tables, print_first_rows
-from reusables import print_colour, GREEN, match_swimmer, parse_name, get_event_name, is_final, rename_final_column
+from .extract_tables import extract_tables, concat_tables
+from reusables import match_swimmer, parse_name, get_event_name, is_final, rename_final_column
 import pandas as pd
 from openpyxl import Workbook
 from openpyxl.styles import Border, Side, Font, PatternFill
@@ -64,11 +64,12 @@ def load_qualifiers(sfile: str) -> tuple[pd.DataFrame, dict]:
     return qualifiers_tables, swimmer_info
 
 def match_swimmers(
-        qualifiers_table: pd.DataFrame,
-        leah_tables: list[pd.DataFrame],
-        events: list[str],
-        time_column_name: str,
-        user_input_callback = None,
+    qualifiers_table: pd.DataFrame,
+    leah_tables: list[pd.DataFrame],
+    events: list[str],
+    time_column_name: str,
+    confirm_callback,
+    progress_callback,
 ) -> dict:
     '''
     Match swimmers from Leah's version to Sammy's version.
@@ -95,6 +96,8 @@ def match_swimmers(
     
         ltable = leah_tables[tableIdx]
 
+        progress_callback(f"Processing event: {event}", "yellow")
+
         # Iterate over each row in the table (i.e. each swimmer)
         for lrowIdx, lrow in ltable.iterrows():
             # Skip NAN rows
@@ -116,7 +119,8 @@ def match_swimmers(
                 qualifiers_table,
                 automatic_matches,
                 manual_matches,
-                user_input_callback=user_input_callback
+                progress_callback=progress_callback,
+                confirm_callback=confirm_callback
             )
             
             # Increment number of matches
@@ -128,8 +132,7 @@ def match_swimmers(
             key = (sfirst_name, ssurname)
             matched_events.setdefault(key, []).append(event)
 
-            # Print in green
-            print_colour(GREEN, f"Successfully matched: {lfirst_name.capitalize()} {lsurname.capitalize()}")
+            progress_callback(f"Successfully matched: {lfirst_name.capitalize()} {lsurname.capitalize()}", "green")
 
             # Get the time
             time = swimmer[event].values[0]
@@ -140,8 +143,7 @@ def match_swimmers(
             # Set the time if it's not nan
             leah_tables[tableIdx].at[lrowIdx, time_column_name] = time if not pd.isnull(time) else "DNS"
 
-    # Print the number of matches
-    print(f"Number of matches: {num_matches} / {total}")
+    progress_callback(f"Number of matches: {num_matches}/{total}")
 
     return matched_events
 
@@ -305,44 +307,76 @@ def restore_final_column(output_table: pd.DataFrame):
         output_table.iloc[idx + 1, TIME_COLUMN_INDEX] = "Finals"
 
 def leahify_qualifiers(
-        sfile: str,
-        lfile: str,
-        output_path: str = "output.xlsx",
-        user_input_callback = None
+    sfile: str,
+    lfile: str,
+    progress_callback,
+    confirm_callback,
+    error_callback,
+    output_path: str = "output.xlsx",
 ) -> None:
     '''
     Turn Sammy's version of qualifiers into Leah's version.
+    
+    Args:
+        sfile: Path to Sammy's qualifiers file
+        lfile: Path to Leah's template file  
+        output_path: Output file path
+        progress_callback: Called with progress messages (str)
+        confirm_callback: Called for user confirmations, expects (message: str, data: dict) -> str
+        error_callback: Called with error messages (str)
     '''
-    # Load qualifier times (Sammy's version)
-    # swimmer_info is a map from swimmer to (age from, age to, gender)
-    qualifiers_table, swimmer_info = load_qualifiers(sfile)
+    try:
+        progress_callback("Loading qualifier times from Sammy's file...")
+        
+        # Load qualifier times (Sammy's version)
+        qualifiers_table, swimmer_info = load_qualifiers(sfile)
+        
+        progress_callback("Extracting tables from Leah's template...")
 
-    # Extract tables from Leah's version
-    leah_tables, full_events, _ = get_leah_tables(lfile, None)
+        # Extract tables from Leah's version
+        leah_tables, full_events, _ = get_leah_tables(lfile, None)
+        
+        # Get time column name in Leah's table
+        time_column_name = leah_tables[0].columns[TIME_COLUMN_INDEX]
+        
+        # Change the "Finals" column name to the time column name in Leah's tables
+        rename_final_column(leah_tables, time_column_name)
+        
+        # Get event names from Leah's tables
+        events = [get_event_name(event) for event in full_events]
+        
+        progress_callback("Matching swimmers between files...", "yellow")
 
-    # Get time column name in Leah's table
-    time_column_name = leah_tables[0].columns[TIME_COLUMN_INDEX]
+        # For each swimmer in Leah's version, find the corresponding time in Sammy's version
+        matched_events = match_swimmers(
+            qualifiers_table, 
+            leah_tables, 
+            events, 
+            time_column_name, 
+            confirm_callback=confirm_callback,
+            progress_callback=progress_callback
+        )
 
-    # Change the "Finals" column name to the time column name in Leah's tables
-    rename_final_column(leah_tables, time_column_name)
+        progress_callback("Processing extra swimmers...")
 
-    # Get event names from Leah's tables
-    events = [get_event_name(event) for event in full_events]
+        # Get extra swimmers per event
+        extras_per_event = get_extras_per_event(qualifiers_table, events, swimmer_info, matched_events)
+        
+        # Insert extras into each Leah table before combining
+        leah_tables_with_extras = add_extras_to_leah_tables(leah_tables, extras_per_event)
 
-    # For each swimmer in Leah's version, find the corresponding time in Sammy's version
-    matched_events = match_swimmers(qualifiers_table, leah_tables, events, time_column_name, user_input_callback)
+        progress_callback("Generating output file...")
 
-    # Get extra swimmers per event
-    extras_per_event = get_extras_per_event(qualifiers_table, events, swimmer_info, matched_events)
+        # Combine all tables into a single output table
+        output_table = combine_tables(leah_tables_with_extras, time_column_name)
+        
+        # Change back the time column name to "Finals" for finals only using the output table
+        restore_final_column(output_table)
+        
+        # Save the output table to an Excel file
+        save_output_table_to_excel(output_table, output_path, time_column_name)
 
-    # Insert extras into each Leah table before combining
-    leah_tables_with_extras = add_extras_to_leah_tables(leah_tables, extras_per_event)
+        progress_callback(f"✅ FILES PROCESSED SUCCESSFULLY! Output saved as '{output_path}'", "green")
 
-    # Combine all tables into a single output table
-    output_table = combine_tables(leah_tables_with_extras, time_column_name)
-
-    # Change back the time column name to "Finals" for finals only using the output table
-    restore_final_column(output_table)
-
-    # Save the output table to an Excel file
-    save_output_table_to_excel(output_table, output_path, time_column_name)
+    except Exception as e:
+        error_callback(f"❌ ERROR: {str(e)}", "red")

@@ -5,6 +5,9 @@ Colour config file for GUI.
 # Common colours
 WHITE = 'white'
 BLACK = 'black'
+RED = '#ff6b6b'
+YELLOW = '#ffd93d'
+TEXT_GREEN = '#6bcf7f'
 
 # Main application colours
 APP_BACKGROUND = "#7eb9f4"
@@ -18,11 +21,6 @@ OUTPUT_BACKGROUND = '#1e1e1e'
 OUTPUT_FOREGROUND = '#d4d4d4'
 OUTPUT_HIGHLIGHT = '#0078d4'
 OUTPUT_CURSOR = '#d4d4d4'
-
-# Text tag colours (for coloured output)
-TEXT_RED = '#ff6b6b'
-TEXT_YELLOW = '#ffd93d'
-TEXT_GREEN = '#6bcf7f'
 
 # Label colours
 LABEL_FOREGROUND = WHITE

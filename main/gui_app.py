@@ -14,81 +14,6 @@ from check_qualifiers import check_qualifiers
 from check_finals import check_finals
 from colours import *
 
-class OutputCapture:
-    """Context manager to capture print statements and user input"""
-    def __init__(self, output_widget, input_callback=None):
-        self.output_widget = output_widget
-        self.input_callback = input_callback
-        self.old_stdout = None
-        self.old_stdin = None
-        
-    def __enter__(self):
-        self.old_stdout = sys.stdout
-        self.old_stdin = sys.stdin
-        sys.stdout = self
-        if self.input_callback:
-            sys.stdin = self
-        return self
-        
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        sys.stdout = self.old_stdout
-        sys.stdin = self.old_stdin
-        
-    def write(self, text):
-        # Write all text, including newlines
-        if self.output_widget.winfo_exists():
-            try:
-                self.output_widget.after_idle(lambda: self._write_to_widget(text))
-            except tk.TclError:
-                pass  # Widget destroyed
-        return len(text)
-        
-    def _write_to_widget(self, text):
-        try:
-            if not self.output_widget.winfo_exists():
-                return
-                
-            self.output_widget.config(state='normal')
-            self._insert_coloured_text(text)
-            self.output_widget.see(tk.END)
-            self.output_widget.config(state='disabled')
-        except tk.TclError:
-            pass  # Widget destroyed or not accessible
-    
-    def _insert_coloured_text(self, text):
-        """Insert text with colour support by parsing ANSI escape codes"""
-        # ANSI colour code pattern
-        ansi_pattern = r'\033\[(\d+)m'
-        
-        # Split text by ANSI codes
-        parts = re.split(ansi_pattern, text)
-        
-        current_colour = None
-        for i, part in enumerate(parts):
-            if i % 2 == 0:  # Text part
-                if current_colour:
-                    self.output_widget.insert(tk.END, part, current_colour)
-                else:
-                    self.output_widget.insert(tk.END, part)
-            else:  # colour code part
-                colour_code = int(part)
-                if colour_code == 91:  # Red
-                    current_colour = "red"
-                elif colour_code == 93:  # Yellow
-                    current_colour = "yellow"
-                elif colour_code == 92:  # Green
-                    current_colour = "green"
-                elif colour_code == 0:  # Reset
-                    current_colour = None
-        
-    def flush(self):
-        pass
-        
-    def readline(self):
-        if self.input_callback:
-            return self.input_callback()
-        return "\n"
-
 class SwimmingResultsApp:
     def __init__(self, root):
         self.root = root
@@ -107,6 +32,8 @@ class SwimmingResultsApp:
             'finals_excel': None,
             'full_results_pdf': None
         }
+
+        self.current_confirmation = None
         
         self.setup_ui()
 
@@ -235,150 +162,174 @@ class SwimmingResultsApp:
         self.output_text.pack(expand=True, fill='both', pady=(0, 20), padx=10)
         
         # Configure modern colour tags
-        self.output_text.tag_configure("red", foreground=TEXT_RED)
-        self.output_text.tag_configure("yellow", foreground=TEXT_YELLOW)
-        self.output_text.tag_configure("green", foreground=TEXT_GREEN)
+        self.output_text.tag_configure("red", foreground=RED)
+        self.output_text.tag_configure("yellow", foreground=YELLOW)
+        self.output_text.tag_configure("green", foreground=GREEN)
     
     def clear_output(self):
         self.output_text.config(state='normal')
         self.output_text.delete(1.0, tk.END)
         self.output_text.config(state='disabled')
     
-    def get_user_input(self, message=None):
-        # If message is provided directly, use it
-        if message:
-            result = self.show_match_confirmation_dialog(message)
-            return result if result else "exit"
+    def append_output(self, text, color=None):
+        """Thread-safe method to append text to output"""
+        def _append():
+            if self.output_text.winfo_exists():
+                try:
+                    self.output_text.config(state='normal')
+                    if color:
+                        self.output_text.insert(tk.END, text + "\n", color)
+                    else:
+                        self.output_text.insert(tk.END, text + "\n")
+                    self.output_text.see(tk.END)
+                    self.output_text.config(state='disabled')
+                except tk.TclError:
+                    pass  # Widget destroyed
         
-        # Extract the prompt from the last few lines written to output
-        all_text = self.output_text.get(1.0, tk.END).strip()
-        lines = all_text.split('\n')
-        
-        # Look for match confirmation prompts
-        prompt = ""
-        swimmer_info = ""
-        
-        for line in reversed(lines):
-            clean_line = re.sub(r'\033\[\d+m', '', line).strip()
-            if "Is this the right match?" in clean_line:
-                prompt = clean_line
-                break
-            elif "->" in clean_line and "similarity score" in clean_line:
-                swimmer_info = clean_line
-                break
-        
-        # Show popup dialog for match confirmation
-        if prompt or swimmer_info:
-            result = self.show_match_confirmation_dialog(swimmer_info or prompt)
-            return result if result else "exit"
-        
-        # Fallback for any other input (shouldn't happen with current implementation)
-        return "n"
+        # Ensure GUI updates happen on main thread
+        self.root.after(0, _append)
 
-    def show_match_confirmation_dialog(self, message):
-        """Show a custom dialog for swimmer match confirmation"""
-        # Extract swimmer names from the message for a cleaner dialog
-        if "->" in message:
-            # Parse the swimmer match info
-            dialog_message = re.sub(r'\033\[\d+m', '', message).strip()
-        else:
-            dialog_message = message
-    
-        # Create custom dialog
-        dialog = tk.Toplevel(self.root)
-        dialog.title("Confirm Swimmer Match")
-        dialog.resizable(False, False)
-        dialog.transient(self.root)
-        dialog.grab_set()  # Make dialog modal
-        
-        # Dialog dimensions
-        dialog_width = 400
-        dialog_height = 200
-        
-        # Force the parent window to update its geometry info
-        self.root.update_idletasks()
-        
-        # Now get accurate parent window information
-        parent_x = self.root.winfo_x()
-        parent_y = self.root.winfo_y()
-        parent_width = self.root.winfo_width()
-        parent_height = self.root.winfo_height()
-        
-        # Calculate centered position
-        x = parent_x + (parent_width - dialog_width) // 2
-        y = parent_y + (parent_height - dialog_height) // 2
-        
-        # Ensure dialog stays on screen
-        x = max(0, x)
-        y = max(0, y)
-        
-        # Set the position explicitly
-        dialog.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
-    
-        # Message label
-        msg_label = tk.Label(
-            dialog,
-            text=dialog_message,
-            font=("Segoe UI", 11),
-            wraplength=350,
-            justify=tk.LEFT,
-            padx=20,
-            pady=20
-        )
-        msg_label.pack(expand=True)
-    
-        # Button frame
-        button_frame = tk.Frame(dialog)
-        button_frame.pack(pady=10)
-    
-        result = {"value": "exit"}
-    
-        def accept():
-            result["value"] = "y"
-            dialog.destroy()
-    
-        def deny():
-            result["value"] = "n"
-            dialog.destroy()
+    def show_confirmation_dialog(self, data: dict):
+        """
+        Show confirmation dialog and return user's choice
 
-        def on_close():
-            result["value"] = "exit"
-            dialog.destroy()
+        Args:
 
-        # Bind the close event
-        dialog.protocol("WM_DELETE_WINDOW", on_close)
-    
-        # Accept button
-        accept_btn = Button(
-            button_frame,
-            text="Accept Match",
-            command=accept,
-            font=("Segoe UI", 10, "bold"),
-            padx=20,
-            pady=8
-        )
-        accept_btn.pack(side=tk.LEFT, padx=10)
-    
-        # Deny button
-        deny_btn = Button(
-            button_frame,
-            text="Deny Match",
-            command=deny,
-            font=("Segoe UI", 10, "bold"),
-            padx=20,
-            pady=8
-        )
-        deny_btn.pack(side=tk.LEFT, padx=10)
+        """
+        # This will be called from a background thread, so we need to use a queue
+        import queue
+        result_queue = queue.Queue()
         
-        # Ensure dialog is visible and focused
-        dialog.deiconify()
-        dialog.lift()
-        dialog.focus_force()
-    
-        # Wait for dialog to close
-        dialog.wait_window()
-    
-        return result["value"]
+        def show_dialog():
+            if self.current_confirmation:
+                # If there's already a dialog, wait for it
+                result_queue.put("wait")
+                return
+            
+            # Create custom dialog
+            dialog = tk.Toplevel(self.root)
+            self.current_confirmation = dialog
+            
+            dialog.title("Confirm Swimmer Match")
+            dialog.resizable(False, False)
+            dialog.transient(self.root)
+            dialog.grab_set()
+            
+            # Dialog dimensions
+            dialog_width = 500
+            dialog_height = 250
+            
+            # Center the dialog
+            self.root.update_idletasks()
+            parent_x = self.root.winfo_x()
+            parent_y = self.root.winfo_y()
+            parent_width = self.root.winfo_width()
+            parent_height = self.root.winfo_height()
+            
+            x = parent_x + (parent_width - dialog_width) // 2
+            y = parent_y + (parent_height - dialog_height) // 2
+            
+            dialog.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
+            
+            # Message display
+            msg_frame = tk.Frame(dialog, padx=20, pady=20)
+            msg_frame.pack(expand=True, fill='both')
+            
+            msg_label = tk.Label(
+                msg_frame,
+                text="Are these the same swimmer?",
+                font=("Segoe UI", 14, "bold")
+            )
+            msg_label.pack(pady=(0, 15))
+            
+            # Sammy's swimmer info
+            sammy_label = tk.Label(
+                msg_frame,
+                text=f"(Sammy) {data['sammy_name']}",
+                font=("Segoe UI", 11, "bold"),
+            )
+            sammy_label.pack(anchor=tk.W, pady=(0, 5))
+            
+            # Leah's swimmer info
+            leah_label = tk.Label(
+                msg_frame,
+                text=f"(Leah) {data['leah_name']}",
+                font=("Segoe UI", 11, "bold"),
+            )
+            leah_label.pack(anchor=tk.W, pady=(0, 5))
+            
+            # Similarity score
+            similarity = data['similarity']
+            similarity_color = GREEN if similarity >= 80 else YELLOW if similarity >= 50 else RED
+            similarity_label = tk.Label(
+                msg_frame,
+                text=f"Similarity Score: {similarity}%",
+                font=("Segoe UI", 11, "bold"),
+                fg=similarity_color
+            )
+            similarity_label.pack(anchor=tk.W, pady=(0, 15))
+            
+            # Buttons
+            button_frame = tk.Frame(dialog)
+            button_frame.pack(pady=(0, 20))
+            
+            def accept():
+                result_queue.put("y")
+                self.current_confirmation = None
+                dialog.destroy()
+            
+            def deny():
+                result_queue.put("n")
+                self.current_confirmation = None
+                dialog.destroy()
+            
+            def cancel():
+                result_queue.put("exit")
+                self.current_confirmation = None
+                dialog.destroy()
+            
+            # Bind close event
+            dialog.protocol("WM_DELETE_WINDOW", cancel)
+            
+            accept_btn = Button(
+                button_frame,
+                text="✓ Accept Match",
+                command=accept,
+                font=("Segoe UI", 10, "bold"),
+                bg=GREEN,
+                padx=20,
+                pady=8
+            )
+            accept_btn.pack(side=tk.LEFT, padx=5)
+            
+            deny_btn = Button(
+                button_frame,
+                text="✗ Deny Match",
+                command=deny,
+                font=("Segoe UI", 10, "bold"),
+                bg=RED,
+                padx=20,
+                pady=8
+            )
+            deny_btn.pack(side=tk.LEFT, padx=5)
+            
+            dialog.deiconify()
+            dialog.lift()
+            dialog.focus_force()
+        
+        # Show dialog on main thread
+        self.root.after(0, show_dialog)
+        
+        # Wait for result
+        while True:
+            try:
+                result = result_queue.get(timeout=0.1)
+                if result == "wait":
+                    continue
+                return result
+            except queue.Empty:
+                # Keep the main thread responsive
+                continue
     
     def _write_to_output(self, text):
         self.output_text.config(state='normal')
@@ -570,19 +521,32 @@ class SwimmingResultsApp:
             try:
                 self.clear_output()
                 
-                with OutputCapture(self.output_text, self.get_user_input):
-                    leahify_qualifiers(
-                        self.file_paths['sammy_qualifiers'],
-                        self.file_paths['leah_template'],
-                        output_path,  # Pass the output path
-                        user_input_callback=self.get_user_input
-                    )
+                # Define callback functions
+                def progress_callback(message, color=None):
+                    self.append_output(message, color)
                 
-                self._write_to_output(f"\n✅ FILES PROCESSED SUCCESSFULLY! Output saved as '{output_path}'\n")
+                def confirm_callback(data):
+                    return self.show_confirmation_dialog(data)
+                
+                def error_callback(message, color=None):
+                    self.append_output(message, color or "red")
+                
+                # Call the backend function with callbacks
+                leahify_qualifiers(
+                    self.file_paths['sammy_qualifiers'],
+                    self.file_paths['leah_template'],
+                    progress_callback=progress_callback,
+                    confirm_callback=confirm_callback,
+                    error_callback=error_callback,
+                    output_path=output_path,
+                )
+                
+            except KeyboardInterrupt:
+                self.append_output("Operation cancelled by user", "red")
             except Exception as e:
-                self._write_to_output(f"\n❌ ERROR: {str(e)}\n")
+                self.append_output(f"❌ ERROR: {str(e)}", "red")
         
-        # Run in separate thread to prevent GUI freezing
+        # Run in separate thread
         threading.Thread(target=process, daemon=True).start()
     
     def run_check_qualifiers(self):
@@ -595,12 +559,28 @@ class SwimmingResultsApp:
             try:
                 self.clear_output()
                 
-                with OutputCapture(self.output_text, self.get_user_input):
-                    check_qualifiers(output_path, self.file_paths['heat_results_pdf'], user_input_callback=self.get_user_input)
+                def progress_callback(message, color=None):
+                    self.append_output(message, color)
+
+                def confirm_callback(data):
+                    return self.show_confirmation_dialog(data)
+
+                def error_callback(message, color=None):
+                    self.append_output(message, color or "red")
                 
-                self._write_to_output("\n✅ QUALIFIER CHECK COMPLETED!\n")
+                # You'll need to update check_qualifiers to accept callbacks too
+                check_qualifiers(
+                    output_path, 
+                    self.file_paths['heat_results_pdf'],
+                    progress_callback=progress_callback,
+                    confirm_callback=confirm_callback,
+                    error_callback=error_callback
+                )
+                
+            except KeyboardInterrupt:
+                self.append_output("Operation cancelled by user", "yellow")
             except Exception as e:
-                self._write_to_output(f"\n❌ ERROR: {str(e)}\n")
+                self.append_output(f"❌ ERROR: {str(e)}", "red")
         
         threading.Thread(target=process, daemon=True).start()
     
@@ -613,16 +593,28 @@ class SwimmingResultsApp:
             try:
                 self.clear_output()
                 
-                with OutputCapture(self.output_text, self.get_user_input):
-                    check_finals(
-                        self.file_paths['finals_excel'],
-                        self.file_paths['full_results_pdf'],
-                        user_input_callback=self.get_user_input
-                    )
+                def progress_callback(message, color=None):
+                    self.append_output(message, color)
                 
-                self._write_to_output("\n✅ FINALS CHECK COMPLETED!\n")
+                def confirm_callback(data):
+                    return self.show_confirmation_dialog(data)
+                
+                def error_callback(message, color=None):
+                    self.append_output(message, color or "red")
+                
+                # You'll need to update check_finals to accept callbacks too
+                check_finals(
+                    self.file_paths['finals_excel'],
+                    self.file_paths['full_results_pdf'],
+                    progress_callback=progress_callback,
+                    confirm_callback=confirm_callback,
+                    error_callback=error_callback
+                )
+                
+            except KeyboardInterrupt:
+                self.append_output("Operation cancelled by user", "yellow")
             except Exception as e:
-                self._write_to_output(f"\n❌ ERROR: {str(e)}\n")
+                self.append_output(f"❌ ERROR: {str(e)}", "red")
         
         threading.Thread(target=process, daemon=True).start()
 

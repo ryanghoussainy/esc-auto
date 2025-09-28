@@ -1,12 +1,10 @@
-from reusables.printing import print_colour, GREEN
 
-
-def print_discrepancies(discrepancies, isQualifiers):
-    print(f"Finished checking {'qualifiers' if isQualifiers else 'finals'}.", end='')
+def display_discrepancies(discrepancies, progress_callback):
     if discrepancies:
 
-        print("Mismatches found:")
+        progress_callback(f"Mismatches found: {len(discrepancies)}", "red")
+
         for d in discrepancies:
-            print(d)
+            progress_callback(str(d))
     else:
-        print_colour(GREEN, "No mismatches found.")
+        progress_callback("No mismatches found.", "green")

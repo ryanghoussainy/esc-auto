@@ -1,9 +1,5 @@
 import pandas as pd
-from reusables import print_colour, RED, YELLOW, GREEN
 from fuzzywuzzy import fuzz
-
-VALID_MATCH_INPUTS = ["y", "n", "exit"]  # Valid inputs for matching swimmers
-VALID_MATCH_INPUTS_STR = f"({'/'.join(VALID_MATCH_INPUTS)}): "  # e.g. "(y, n, exit)"
 
 
 def get_close_matches(
@@ -36,45 +32,45 @@ def prompt_manual_match(
     scores: list[tuple[str, str, int]],
     qualifiers_table: pd.DataFrame,
     manual_matches: dict[tuple[str, str], tuple[str, str]],
+    progress_callback,
+    confirm_callback,
     sfirst_name_col: str = "First name",
     ssurname_col: str = "Surname",
-    user_input_callback = None,
 ) -> pd.DataFrame:
     """
     Prompt the user to manually confirm a match from a list of scored candidates.
     Returns the matched swimmer DataFrame.
     """
-    print_colour(YELLOW, f"Trying to match... {lfirst_name.capitalize()} {lsurname.capitalize()}")
+    progress_callback(f"Trying to match... {lfirst_name.capitalize()} {lsurname.capitalize()}", "yellow")
+
     for sfirst_name, ssurname, score in scores:
-        print(f"Is this the right match? ", end="")
-        print_colour(YELLOW, f"{lfirst_name.capitalize()} {lsurname.capitalize()}", end="")
-        print_colour(YELLOW, f" -> {sfirst_name.capitalize()} {ssurname.capitalize()}", end="")
-        print(f" (similarity score: {score}%)")
+        match_data = {
+            'leah_name': f"{lfirst_name.capitalize()} {lsurname.capitalize()}",
+            'sammy_name': f"{sfirst_name.capitalize()} {ssurname.capitalize()}",
+            'similarity': score
+        }
+
+        match = confirm_callback(match_data)
         
-        if user_input_callback:
-            match = user_input_callback(f"{lfirst_name.capitalize()} {lsurname.capitalize()} -> {sfirst_name.capitalize()} {ssurname.capitalize()} (similarity score: {score}%)")
-        else:
-            match = input(VALID_MATCH_INPUTS_STR)
-
-        while match.lower() not in VALID_MATCH_INPUTS:
-            print("Invalid input")
-            if user_input_callback:
-                match = user_input_callback("Invalid input, please try again")
-            else:
-                match = input(VALID_MATCH_INPUTS_STR)
-
+        # Handle response
         if match.lower() == 'exit':
-            print_colour(RED, "Cancelled")
-            exit()
+            raise KeyboardInterrupt("User cancelled operation")
+
         if match.lower() == 'y':
             manual_matches[(lfirst_name, lsurname)] = (sfirst_name, ssurname)
             swimmer = qualifiers_table[
                 (qualifiers_table[sfirst_name_col] == sfirst_name) &
                 (qualifiers_table[ssurname_col] == ssurname)
             ]
+            progress_callback(f"Manual match confirmed: {lfirst_name.capitalize()} {lsurname.capitalize()} -> {sfirst_name.capitalize()} {ssurname.capitalize()}", "green")
             return swimmer
-
-    raise ValueError(f"No swimmer found: {lfirst_name.capitalize()} {lsurname.capitalize()}")
+        
+        progress_callback(f"Match rejected, trying next candidate...", "yellow")
+    
+    # No matches found
+    error_msg = f"No swimmer found: {lfirst_name.capitalize()} {lsurname.capitalize()}"
+    progress_callback(error_msg, "red")
+    raise ValueError(error_msg)
 
 
 def match_swimmer(
@@ -83,14 +79,26 @@ def match_swimmer(
     qualifiers_table: pd.DataFrame,
     automatic_matches: dict[tuple[str, str], tuple[str, str]],
     manual_matches: dict[tuple[str, str], tuple[str, str]],
+    progress_callback,
+    confirm_callback,
     sfirst_name_col: str = "First name",
     ssurname_col: str = "Surname",
-    user_input_callback = None,
 ) -> pd.DataFrame:
     """
     Find and return the swimmer row in qualifiers_table matching the given Leah swimmer.
+    
+    Args:
+        lfirst_name: First name from Leah's file
+        lsurname: Surname from Leah's file
+        qualifiers_table: Sammy's qualifiers DataFrame
+        automatic_matches: Dict of previously confirmed automatic matches
+        manual_matches: Dict of previously confirmed manual matches
+        progress_callback: Callback for progress messages (message, color)
+        confirm_callback: Callback for user confirmations (message, data) -> response
+        sfirst_name_col: Column name for first name in Sammy's file
+        ssurname_col: Column name for surname in Sammy's file
     """
-    # Automatic match
+    # Check automatic matches first
     key = (lfirst_name, lsurname)
     if key in automatic_matches:
         sfirst, ssurname = automatic_matches[key]
@@ -98,15 +106,17 @@ def match_swimmer(
             (qualifiers_table[sfirst_name_col] == sfirst) &
             (qualifiers_table[ssurname_col] == ssurname)
         ]
+        progress_callback(f"Found automatic match: {lfirst_name.capitalize()} {lsurname.capitalize()}", "green")
         return swimmer
     
-    # Manual match already exists
+    # Check manual matches already confirmed
     if key in manual_matches:
         sfirst, ssurname = manual_matches[key]
         swimmer = qualifiers_table[
             (qualifiers_table[sfirst_name_col] == sfirst) &
             (qualifiers_table[ssurname_col] == ssurname)
         ]
+        progress_callback(f"Found previous manual match: {lfirst_name.capitalize()} {lsurname.capitalize()}", "green")
         return swimmer
 
     # Compute close matches
@@ -119,9 +129,15 @@ def match_swimmer(
         sfirst_name_col=sfirst_name_col,
         ssurname_col=ssurname_col
     )
+    
+    if not scores:
+        error_msg = f"No potential matches found for: {lfirst_name.capitalize()} {lsurname.capitalize()}"
+        progress_callback(error_msg, "red")
+        raise ValueError(error_msg)
+    
     first_candidate = scores[0]
 
-    # Exact match
+    # Exact match (100% similarity)
     if first_candidate[2] == 100:
         sfirst, ssurname = first_candidate[0], first_candidate[1]
         automatic_matches[key] = (sfirst, ssurname)
@@ -129,9 +145,12 @@ def match_swimmer(
             (qualifiers_table[sfirst_name_col] == sfirst) &
             (qualifiers_table[ssurname_col] == ssurname)
         ]
+        progress_callback(f"Found exact match: {lfirst_name.capitalize()} {lsurname.capitalize()} -> {sfirst.capitalize()} {ssurname.capitalize()}", "green")
         return swimmer
 
     # Otherwise, prompt for manual match
+    progress_callback(f"No exact match found for {lfirst_name.capitalize()} {lsurname.capitalize()}, requesting manual confirmation...", "yellow")
+    
     return prompt_manual_match(
         lfirst_name,
         lsurname,
@@ -140,5 +159,6 @@ def match_swimmer(
         manual_matches,
         sfirst_name_col=sfirst_name_col,
         ssurname_col=ssurname_col,
-        user_input_callback=user_input_callback,
+        progress_callback=progress_callback,
+        confirm_callback=confirm_callback,
     )
