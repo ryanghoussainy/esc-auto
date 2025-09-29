@@ -44,7 +44,7 @@ MONTHS = [
 class SwimmingResultsApp:
     def __init__(self, root):
         self.root = root
-        self.root.title("")
+        self.root.title("ESC Auto")
         self.root.geometry("1200x800")
         self.root.configure(bg=APP_BACKGROUND)
 
@@ -100,6 +100,16 @@ class SwimmingResultsApp:
                 image_label.pack(side=tk.LEFT, padx=(0, 15))
         except Exception as e:
             print(f"Could not load logo: {e}")
+
+        # Add title label
+        title_label = tk.Label(
+            title_frame,
+            text="ESC Auto",
+            font=("Segoe UI", 16, "bold"),
+            bg=APP_BACKGROUND,
+            fg=APP_TITLE
+        )
+        title_label.pack(side=tk.LEFT, padx=(0, 15))
 
         # Add version label
         version_label = tk.Label(
