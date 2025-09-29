@@ -26,7 +26,7 @@ jobs:
         
     - name: Build executable
       run: |
-        pyinstaller --onefile --windowed --add-data "images/esc-logo.png:images" --name "ESC Auto" --icon images/esc-logo.png main/run.py
+        pyinstaller --onefile --windowed --add-data "images/esc-logo.png:images" --name "ESC Auto" --icon images/icon.icns main/run.py
 
     - name: Create DMG
       run: |
