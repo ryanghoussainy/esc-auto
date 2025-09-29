@@ -26,17 +26,17 @@ jobs:
         
     - name: Build executable
       run: |
-        pyinstaller --onefile --windowed --add-data "images/esc-logo.png:images" --name "Auto House Champs" --icon images/esc-logo.png main/run.py
+        pyinstaller --onefile --windowed --add-data "images/esc-logo.png:images" --name "ESC Auto" --icon images/esc-logo.png main/run.py
 
     - name: Create DMG
       run: |
         mkdir -p dmg-contents
-        cp -R "dist/Auto House Champs.app" dmg-contents/
-        hdiutil create -volname "Auto House Champs" -srcfolder dmg-contents -ov -format UDZO "Auto House Champs.dmg"
+        cp -R "dist/ESC Auto.app" dmg-contents/
+        hdiutil create -volname "ESC Auto" -srcfolder dmg-contents -ov -format UDZO "ESC Auto.dmg"
 
     - name: Upload Mac executable
       uses: actions/upload-artifact@v4
       with:
         name: mac-executable
-        path: 'Auto House Champs.dmg'
+        path: 'ESC Auto.dmg'
         retention-days: 30  # How long GitHub keeps the artifact

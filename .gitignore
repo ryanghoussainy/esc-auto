@@ -24,3 +24,6 @@ example*/
 
 # Instructions file
 INSTRUCTIONS.docx
+
+# MacOS files
+.DS_Store
