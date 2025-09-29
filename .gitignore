@@ -21,9 +21,11 @@ dist/
 
 # Example directories
 example*/
-
-# Instructions file
-INSTRUCTIONS.docx
+sign_in/
+timesheets/
 
 # MacOS files
 .DS_Store
+
+# Instructions
+instructions/
