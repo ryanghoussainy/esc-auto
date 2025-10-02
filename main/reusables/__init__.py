@@ -3,3 +3,4 @@ from .parsing import *
 from .times import *
 from .finals import *
 from .entry import *
+from .events import *

@@ -1,24 +1,29 @@
 import pandas as pd
+from datetime import datetime
+from openpyxl import load_workbook
 
 from .read_sign_in import read_sign_in_sheet
 from discrepancies import display_discrepancies
 from reusables.entry import Entry
+from reusables.events import is_event
 from discrepancies import EmptyTimesheet, InvalidName, TimesheetExtraEntry, SignInExtraEntry
 
 
+NAME_CELL = (2, 2)
 DATE_COL = "Date"
-WEEKDAY_COL = "Week day"
-RATE_COL = "Rate of pay (see table below)"
-COL_NAMES = ["Acton hours", "Admin hours", "Safeguarding hours", "GALA day rate", "House Event day rate"]
+START_TIME_COL = "Start"
+END_TIME_COL = "End"
+HOUSE_COL = "House"
+LEVEL_COL = "Level"
+RATE_INCREASE_CELL = (53, 6) # for ex. 0.03 for 3% increase
+ADMIN_RATE_INCREASE = 1.05
 
 def read_timesheet(df) -> tuple[str, list[Entry]]:
     """
     Read a timesheet excel file and return a set of entries
     """
     # Get the name
-    first_name = str(df.iloc[3, 2]).strip()
-    last_name = str(df.iloc[4, 2]).strip()
-    name = first_name + " " + last_name
+    name = str(df.iloc[NAME_CELL]).strip()
     
     # Get the row index of the header
     header_row_index = df[df.iloc[:, 0] == DATE_COL].index[0]
@@ -32,24 +37,70 @@ def read_timesheet(df) -> tuple[str, list[Entry]]:
     table_df = table_df[1:]
 
     # Filter rows by those that have a date
-    table_df.dropna(subset=[DATE_COL, WEEKDAY_COL], inplace=True)
+    table_df = table_df[table_df[DATE_COL].apply(lambda x: isinstance(x, datetime))]
     table_df.reset_index(drop=True, inplace=True)
+
+    # Get rate of increase
+    if isinstance(df.iloc[RATE_INCREASE_CELL], float):
+        # This is for Enhanced Timesheet
+        rate_increase = 1 + df.iloc[RATE_INCREASE_CELL]
+    else:
+        # This is for Basic Timesheet
+        x, y = RATE_INCREASE_CELL
+        rate_increase = 1 + df.iloc[x - 1, y] # in the cell above
     
-    # Create a tuple of (number of hours, start time, end time, rate)
+    # Find the rate table header
+    rate_table_header = "Standard rates of pay (exclusive of holiday pay) "
+    header_row = None
+    for idx, row in df.iterrows():
+        if rate_table_header in row.values:
+            header_row = idx
+            break
+    
+    if header_row is None:
+        raise ValueError(f"Could not find rate table header '{rate_table_header}' in timesheet for {name}")
+    
+    # Read normal rates table (levels and rates)
+    level_to_rate = {}
+    read_rates_table(df, header_row + 1, level_to_rate, rate_increase, levels_col=4, is_events_table=False)
+    read_rates_table(df, header_row + 1, level_to_rate, rate_increase, levels_col=9, is_events_table=True)
+
+    # Create list of entries
     timesheet_data = []
     
     for _, row in table_df.iterrows():
-        hours_worked = [col_name for col_name in COL_NAMES if pd.notna(row[col_name])]
-
-        if not hours_worked:
-            raise ValueError(f"No hours found for {name} on {row[DATE_COL]}")
-        if len(hours_worked) > 1:
-            raise ValueError(f"Multiple hours found in a single row for {name} on {row[DATE_COL]}")
+        # Get start time and end time
+        start_time = row[START_TIME_COL]
+        end_time = row[END_TIME_COL]
+        if pd.isna(start_time) or pd.isna(end_time):
+            raise ValueError(f"Missing start or end time for {name} on {row[DATE_COL]}")
         
+        # Calculate hours worked
+        end_hours = end_time.hour + end_time.minute / 60
+        start_hours = start_time.hour + start_time.minute / 60
+        hours_worked = end_hours - start_hours
+        if hours_worked <= 0:
+            raise ValueError(f"End time must be after start time for {name} on {row[DATE_COL]}")
+
+        # Get house - if it's not acton then skip
+        house = row[HOUSE_COL]
+        if house != "Acton":
+            continue
+
+        # Get level
+        level = row[LEVEL_COL].lower()
+
+        # Get rate
+        if level not in level_to_rate:
+            raise ValueError(f"Invalid level '{level}' for {name} on {row[DATE_COL]}")
+        rate = level_to_rate[level]
+
+        # Create entry
         entry = Entry(
             date=row[DATE_COL].date(),
-            hours=float(row[hours_worked[0]]),
-            rate=row[RATE_COL],
+            hours=hours_worked,
+            rate=rate,
+            is_event=is_event(level)
         )
         timesheet_data.append(entry)
 
@@ -75,7 +126,9 @@ def check_timesheets(
         with pd.ExcelFile(amindefied_excel_path) as xls:
             for sheet_name in xls.sheet_names:
                 # Read individual timesheet
-                df = pd.read_excel(xls, sheet_name=sheet_name)
+                wb = load_workbook(amindefied_excel_path, read_only=True, data_only=False)
+                ws = wb[sheet_name]
+                df = pd.DataFrame(ws.values)
                 if df.empty:
                     discrepancies.append(EmptyTimesheet(sheet_name=sheet_name))
 
@@ -117,3 +170,32 @@ def check_timesheet(df, sign_in_data: dict[str, set[Entry]], discrepancies, prog
                 # Successfully matched entry
                 sign_in_set.remove(entry)
                 timesheet_set.remove(entry)
+
+
+def read_rates_table(df, start_row, levels_col, is_events_table, level_to_rate, rate_increase):
+    """Read rates table (normal or events) and populate level_to_rate dictionary."""
+    current_row = start_row
+    rates_col = levels_col + 2 if not is_events_table else levels_col + 1
+
+    while current_row < len(df):
+        level = df.iloc[current_row, levels_col]
+        rate = df.iloc[current_row, rates_col]
+
+        # Stop at empty row
+        if pd.isna(level) or level == "":
+            break
+        
+        # Only add if rate is not empty
+        if not pd.isna(rate) and rate != "":
+            level_to_rate[level.lower()] = rate
+        
+        current_row += 1
+    
+    # Apply rate increase if normal rates table
+    if not is_events_table:
+        for lvl in level_to_rate:
+            if lvl in ("Admin", "Training"):
+                level_to_rate[lvl] = round(level_to_rate[lvl] * ADMIN_RATE_INCREASE, 2)
+            else:
+                level_to_rate[lvl] = round(level_to_rate[lvl] * rate_increase, 2)
+        

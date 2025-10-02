@@ -1,6 +1,8 @@
 import pandas as pd
-from reusables.entry import Entry
 from collections import defaultdict
+
+from reusables.entry import Entry
+from reusables.events import is_event
 
 NAME_COL = "Name"
 LEVEL_COL = "Level"
@@ -41,6 +43,7 @@ def read_sign_in_sheet(month: str, file_path: str, rates: dict[str, float], rate
                 date=col.date(),
                 hours=float(row[col]),
                 rate=rate,
+                is_event=is_event(row[LEVEL_COL])
             )
             sign_in_sheet_data[name].add(entry)
 
