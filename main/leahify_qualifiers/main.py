@@ -306,6 +306,11 @@ def restore_final_column(output_table: pd.DataFrame):
         # Change the time column name to "Finals"
         output_table.iloc[idx + 1, TIME_COLUMN_INDEX] = "Finals"
 
+def add_time_column(leah_tables: list[pd.DataFrame]):
+    for leah_table in leah_tables:
+        if leah_table.columns[TIME_COLUMN_INDEX] != "Time":
+            leah_table.insert(TIME_COLUMN_INDEX, "Time", "")
+
 def leahify_qualifiers(
     sfile: str,
     lfile: str,
@@ -336,6 +341,9 @@ def leahify_qualifiers(
         # Extract tables from Leah's version
         leah_tables, full_events, _ = get_leah_tables(lfile, None)
         
+        # Add Time column if it doesn't exist
+        add_time_column(leah_tables)
+
         # Get time column name in Leah's table
         time_column_name = leah_tables[0].columns[TIME_COLUMN_INDEX]
         
