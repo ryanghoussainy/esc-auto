@@ -14,6 +14,7 @@ def extract_tables(
         sheet_name: str,
         header_identifiers: list[(str, int)],
         get_events: bool = False,
+        is_leah: bool = False,
 ) -> tuple[list[pd.DataFrame], list[str], dict[str, (int, int, str)]]:
     '''
     Extracts all tables from the given excel sheet.
@@ -96,6 +97,10 @@ def extract_tables(
                 
         # If we have found the headers, then add the swimmer row to the current table.
         elif headers_found and not row.isnull().all():
+            # Do not add Northolt swimmers for Leah's tables
+            if is_leah and str(row[3]) in ["Northolt", "St Helens"]:
+                continue
+
             current_table.append(row.to_list())
             # Also add it to the swimmer info
             first_name, surname = row[0], row[1]

@@ -445,6 +445,11 @@ class SwimmingResultsApp:
                 self.current_confirmation = None
                 dialog.destroy()
             
+            def ignore():
+                result_queue.put("ignore")
+                self.current_confirmation = None
+                dialog.destroy()
+            
             def cancel():
                 result_queue.put("exit")
                 self.current_confirmation = None
@@ -474,7 +479,18 @@ class SwimmingResultsApp:
                 pady=8
             )
             deny_btn.pack(side=tk.LEFT, padx=5)
-            
+
+            ignore_btn = Button(
+                button_frame,
+                text="Ignore",
+                command=ignore,
+                font=("Segoe UI", 10, "bold"),
+                bg=YELLOW,
+                padx=20,
+                pady=8
+            )
+            ignore_btn.pack(side=tk.LEFT, padx=5)
+
             dialog.deiconify()
             dialog.lift()
             dialog.focus_force()

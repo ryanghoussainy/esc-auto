@@ -56,6 +56,10 @@ def prompt_manual_match(
         if match.lower() == 'exit':
             raise KeyboardInterrupt("User cancelled operation")
 
+        if match.lower() == 'ignore':
+            progress_callback(f"Ignored swimmer: {lfirst_name.capitalize()} {lsurname.capitalize()}", "yellow")
+            return pd.DataFrame()
+
         if match.lower() == 'y':
             manual_matches[(lfirst_name, lsurname)] = (sfirst_name, ssurname)
             swimmer = qualifiers_table[

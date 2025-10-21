@@ -27,9 +27,7 @@ def get_qualifiers_table(file: str, sheet_name: str) -> tuple[pd.DataFrame, list
     '''
     Extract the tables from Sammy's version of the qualifiers.
     '''
-    qualifiers_table, _, s_info = extract_tables(file, sheet_name, [
-        (QUAL_TABLE_ID, 0)
-    ])
+    qualifiers_table, _, s_info = extract_tables(file, sheet_name, [(QUAL_TABLE_ID, 0)], is_leah=False)
     return concat_tables(qualifiers_table), s_info
 
 def get_leah_tables(file: str, sheet_name: str) -> tuple[list[pd.DataFrame], list[str], dict[str, (int, int, str)]]:
@@ -44,9 +42,7 @@ def get_leah_tables(file: str, sheet_name: str) -> tuple[list[pd.DataFrame], lis
     - A list of full event names
     - A list of swimmer info (age from, age to, gender)
     '''
-    return extract_tables(file, sheet_name, [
-        (LEAH_TABLE_ID, 0)
-    ], get_events=True)
+    return extract_tables(file, sheet_name, [(LEAH_TABLE_ID, 0)], get_events=True, is_leah=True)
 
 def load_qualifiers(sfile: str) -> tuple[pd.DataFrame, dict]:
     '''
@@ -76,13 +72,13 @@ def match_swimmers(
     Returns a dictionary mapping swimmer names (Sammy's version) to a list of events they swam.
     '''
     # For each swimmer in Leah's version, find the corresponding time in Sammy's version
-    # Keep track of number of successful matches
-    num_matches = 0
-    total = 0
+    # Keep track of number of successful matches and number of ignored swimmers
+    total, num_matches, num_ignored = 0, 0, 0
 
     # Keep track of manual and automatic matches
     manual_matches = {} # manual matches are from user input
     automatic_matches = {} # automatic matches are from exact matches
+    ignored_swimmers = set() # keep track of ignored swimmers
 
     # Keep track of which events have been matched.
     # This is for the extras table (i.e. which swimmers swam but did not sign up)
@@ -111,7 +107,10 @@ def match_swimmers(
             lfirst_names, lsurname = parse_name(lrow['Name'])
             lfirst_name = lfirst_names.split()[0]
 
-            # Match the swimmer to Sammy's version
+            # check if swimmer has already been ignored
+            if (lfirst_name, lsurname) in ignored_swimmers:
+                continue
+
             # Match the swimmer to Sammy's version
             swimmer = match_swimmer(
                 lfirst_name,
@@ -122,6 +121,11 @@ def match_swimmers(
                 progress_callback=progress_callback,
                 confirm_callback=confirm_callback
             )
+            # Check if swimmer was ignored
+            if swimmer.empty:
+                ignored_swimmers.add((lfirst_name, lsurname))
+                num_ignored += 1
+                continue
             
             # Increment number of matches
             num_matches += 1
@@ -144,6 +148,7 @@ def match_swimmers(
             leah_tables[tableIdx].at[lrowIdx, time_column_name] = time if not pd.isnull(time) else "DNS"
 
     progress_callback(f"Number of matches: {num_matches}/{total}")
+    progress_callback(f"Number of ignored swimmers: {num_ignored}/{total}")
 
     return matched_events
 
@@ -308,7 +313,7 @@ def restore_final_column(output_table: pd.DataFrame):
 
 def add_time_column(leah_tables: list[pd.DataFrame]):
     for leah_table in leah_tables:
-        if leah_table.columns[TIME_COLUMN_INDEX] != "Time":
+        if leah_table.columns[TIME_COLUMN_INDEX] not in ["Time", "Finals"]:
             leah_table.insert(TIME_COLUMN_INDEX, "Time", "")
 
 def leahify_qualifiers(
