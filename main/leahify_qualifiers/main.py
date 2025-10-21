@@ -27,7 +27,7 @@ def get_qualifiers_table(file: str, sheet_name: str) -> tuple[pd.DataFrame, list
     '''
     Extract the tables from Sammy's version of the qualifiers.
     '''
-    qualifiers_table, _, s_info = extract_tables(file, sheet_name, [(QUAL_TABLE_ID, 0)], is_leah=False)
+    qualifiers_table, _, s_info = extract_tables(file, sheet_name, [(QUAL_TABLE_ID, 0)])
     return concat_tables(qualifiers_table), s_info
 
 def get_leah_tables(file: str, sheet_name: str) -> tuple[list[pd.DataFrame], list[str], dict[str, (int, int, str)]]:
@@ -42,7 +42,7 @@ def get_leah_tables(file: str, sheet_name: str) -> tuple[list[pd.DataFrame], lis
     - A list of full event names
     - A list of swimmer info (age from, age to, gender)
     '''
-    return extract_tables(file, sheet_name, [(LEAH_TABLE_ID, 0)], get_events=True, is_leah=True)
+    return extract_tables(file, sheet_name, [(LEAH_TABLE_ID, 0)], get_events=True)
 
 def load_qualifiers(sfile: str) -> tuple[pd.DataFrame, dict]:
     '''
@@ -98,6 +98,10 @@ def match_swimmers(
         for lrowIdx, lrow in ltable.iterrows():
             # Skip NAN rows
             if pd.isnull(lrow["Name"]):
+                continue
+
+            # Skip Northolt and St Helens swimmers
+            if str(lrow["Team"]).strip() in ["Northolt", "St Helens"]:
                 continue
 
             # Increment total number of swimmer rows
