@@ -69,6 +69,10 @@ def check_qualifiers(
             
             # For normal rows, match swimmer names and times directly
             for _, row in leah_normal_df.iterrows():
+                # Skip Northolt and St Helens swimmers
+                if str(row["Team"]).strip() in ["Northolt", "St Helens"]:
+                    continue
+
                 name = clean_name(row['Name']) # Remove garbage pdf-read dashes
                 time = row[time_column_name]
 
@@ -87,6 +91,11 @@ def check_qualifiers(
                         
                         # If we have DQ with explanation, we consider them equal
                         if "DQ" in matched_pdf_row['Time'].values[0] and "DQ" in row[time_column_name]:
+                            pdf_table.drop(matched_pdf_row.index, inplace=True)
+                            continue
+
+                        # If leah is NAN and pdf is NS, then we consider it equal
+                        if pd.isna(row[time_column_name]) and matched_pdf_row['Time'].values[0] == "NS":
                             pdf_table.drop(matched_pdf_row.index, inplace=True)
                             continue
 

@@ -50,18 +50,19 @@ def parse_name(name: str) -> tuple[str, str]:
     
 def parse_swimmer(line):
     """
-    Takes a string of this form "Esc 107 LastNames, FirstName MiddleNameInitials 56.30  NT".
+    Takes a string of this form "Acton 107 LastNames, FirstName MiddleNameInitials 56.30  NT".
+    We skip swimmers from Northolt or St Helens.
     Returns a tuple of (Name, Seed Time, Time).
     The name is in the format "LastNames, FirstName"
     """
     # Split by spaces or commas
     tokens = re.split(r' |,', line.strip())
     
-    # Skip "Esc"
-    if tokens[0] == "Esc":
+    # Skip "Acton"
+    if tokens[0] == "Acton":
         tokens.pop(0)
     else:
-        raise ValueError(f"Line does not start with 'Esc'\n{line}")
+        raise ValueError(f"Line does not start with 'Acton'\n{line}")
     
     # Skip all ' ' tokens and numbers until we hit a name
     while tokens and (tokens[0] == '' or contains_digit(tokens[0])):
@@ -164,7 +165,7 @@ def read_pdf(pdf_path, isQualifiers: bool):
             # Collect swimmer data for this event
             swimmers = []
             while idx < len(lines) and not lines[idx].strip().startswith("Event"):
-                if lines[idx].strip().startswith("Esc"):
+                if lines[idx].strip().startswith("Acton"):
                     name, seed_time, time = parse_swimmer(lines[idx])
                     swimmers.append({
                         "Name": name,
