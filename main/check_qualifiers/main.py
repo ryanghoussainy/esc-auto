@@ -103,7 +103,15 @@ def check_qualifiers(
                         pdf_time_normalised = normalise_time(matched_pdf_row['Time'].values[0])
                         leah_time_normalised = normalise_time(time)
 
-                        if pdf_time_normalised != leah_time_normalised:
+                        # Try to compare floats if possible
+                        float_match = False
+                        try:
+                            if float(pdf_time_normalised) == float(leah_time_normalised):
+                                float_match = True
+                        except:
+                            pass
+
+                        if not float_match and pdf_time_normalised != leah_time_normalised:
                             discrepancies.append(TimeDiscrepancy(name, event_name, matched_pdf_row['Time'].values[0], time))
 
                         # SUCCESSFUL MATCH
