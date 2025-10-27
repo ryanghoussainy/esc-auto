@@ -62,8 +62,8 @@ def read_timesheet(df) -> tuple[str, list[Entry]]:
     
     # Read normal rates table (levels and rates)
     level_to_rate = {}
-    read_rates_table(df, header_row + 1, level_to_rate, rate_increase, levels_col=4, is_events_table=False)
-    read_rates_table(df, header_row + 1, level_to_rate, rate_increase, levels_col=9, is_events_table=True)
+    read_rates_table(df, start_row=header_row + 1, levels_col=4, is_events_table=False, level_to_rate=level_to_rate, rate_increase=rate_increase)
+    read_rates_table(df, start_row=header_row + 1, levels_col=9, is_events_table=True, level_to_rate=level_to_rate, rate_increase=rate_increase)
 
     # Create list of entries
     timesheet_data = []
@@ -162,7 +162,7 @@ def check_timesheet(df, sign_in_data: dict[str, set[Entry]], discrepancies, prog
         sign_in_set = sign_in_data[name]
 
         # For each entry in the timesheet data, match and remove from the sign in data
-        progress_callback(f"\nChecking timesheet for {name}...\n")
+        progress_callback(f"Checking timesheet for {name}...\n")
         for entry in timesheet_entries:
             if entry not in sign_in_set:
                 discrepancies.append(TimesheetExtraEntry(name=name, entry=entry))
@@ -179,7 +179,12 @@ def read_rates_table(df, start_row, levels_col, is_events_table, level_to_rate, 
 
     while current_row < len(df):
         level = df.iloc[current_row, levels_col]
-        rate = df.iloc[current_row, rates_col]
+
+        # If the level is not other, read the hidden column for this rate, otherwise read the visible column
+        if level != "Other":
+            rate = df.iloc[current_row, rates_col]
+        else:
+            rate = df.iloc[current_row, rates_col - 1]
 
         # Stop at empty row
         if pd.isna(level) or level == "":
@@ -194,8 +199,8 @@ def read_rates_table(df, start_row, levels_col, is_events_table, level_to_rate, 
     # Apply rate increase if normal rates table
     if not is_events_table:
         for lvl in level_to_rate:
-            if lvl in ("Admin", "Training"):
+            if lvl in ("admin", "training"):
                 level_to_rate[lvl] = round(level_to_rate[lvl] * ADMIN_RATE_INCREASE, 2)
-            else:
+            elif lvl != "other":
                 level_to_rate[lvl] = round(level_to_rate[lvl] * rate_increase, 2)
         
