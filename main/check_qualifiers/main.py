@@ -16,11 +16,11 @@ def split_extra_rows(leah_table):
     for _, row in leah_table.iterrows():
         if row['Lane'].lower() == 'extra':
             break
-        leah_normal_rows.append(row)
+        leah_normal_rows.append(row.to_dict())
 
     # Add the rest of the rows as extra rows. (+1 to skip the 'EXTRA' header row)
     leah_extra_df = leah_table.iloc[len(leah_normal_rows) + 1:].reset_index(drop=True)
-    leah_normal_df = pd.DataFrame(leah_normal_rows)
+    leah_normal_df = pd.DataFrame.from_records(leah_normal_rows)
     leah_normal_df = leah_normal_df.dropna(subset=["Name"])
 
     return leah_normal_df, leah_extra_df
