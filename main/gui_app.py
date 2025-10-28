@@ -22,17 +22,17 @@ from colours import *
 def get_rates_file_path():
     system = platform.system()
     if system == "Windows":
-        return os.path.join(os.path.expanduser("~"), "AppData", "Local", "AutoTimesheetChecker", "rates.json")
+        return os.path.join(os.path.expanduser("~"), "AppData", "Local", "ESCAuto", "rates.json")
     elif system == "Darwin":
-        return os.path.join(os.path.expanduser("~"), "Library", "Application Support", "AutoTimesheetChecker", "rates.json")
+        return os.path.join(os.path.expanduser("~"), "Library", "Application Support", "ESCAuto", "rates.json")
     else:
         raise NotImplementedError(f"Unsupported OS: {system}")
 
 RATES_FILE = get_rates_file_path()
 
 RATE_LEVELS = [
-    "L1", "L2", "NQL2", "Enhanced L2", "Lower Enhanced L2",
-    "Safeguarding", "Admin", "Gala Full Day", "Gala Half Day"
+    "L1", "NQL2", "L2", "Enhanced L2", "Lower Enhanced L2",
+    "Safeguarding", "Admin", "Gala Full Day", "Gala Half Day", "House Event"
 ]
 
 # The months considered for timesheets. The swimming year is September-July
@@ -45,7 +45,7 @@ class SwimmingResultsApp:
     def __init__(self, root):
         self.root = root
         self.root.title("ESC Auto")
-        self.root.geometry("1200x800")
+        self.root.geometry("1200x1000")
         self.root.configure(bg=APP_BACKGROUND)
 
         # Setup modern styles
