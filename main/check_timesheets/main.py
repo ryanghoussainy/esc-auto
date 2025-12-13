@@ -15,7 +15,7 @@ START_TIME_COL = "Start"
 END_TIME_COL = "End"
 HOUSE_COL = "House"
 LEVEL_COL = "Level"
-RATE_INCREASE_CELL = (53, 6) # for ex. 0.03 for 3% increase
+RATE_INCREASE_COL_IDX = 6
 ADMIN_RATE_INCREASE = 1.05
 
 def read_timesheet(df) -> tuple[str, list[Entry]]:
@@ -39,15 +39,6 @@ def read_timesheet(df) -> tuple[str, list[Entry]]:
     # Filter rows by those that have a date
     table_df = table_df[table_df[DATE_COL].apply(lambda x: isinstance(x, datetime))]
     table_df.reset_index(drop=True, inplace=True)
-
-    # Get rate of increase
-    if isinstance(df.iloc[RATE_INCREASE_CELL], float):
-        # This is for Enhanced Timesheet
-        rate_increase = 1 + df.iloc[RATE_INCREASE_CELL]
-    else:
-        # This is for Basic Timesheet
-        x, y = RATE_INCREASE_CELL
-        rate_increase = 1 + df.iloc[x - 1, y] # in the cell above
     
     # Find the rate table header
     rate_table_header = "Standard rates of pay (exclusive of holiday pay) "
@@ -59,6 +50,9 @@ def read_timesheet(df) -> tuple[str, list[Entry]]:
     
     if header_row is None:
         raise ValueError(f"Could not find rate table header '{rate_table_header}' in timesheet for {name}")
+    
+    # Get rate of increase
+    rate_increase = 1 + df.iloc[header_row - 1, RATE_INCREASE_COL_IDX]
     
     # Read normal rates table (levels and rates)
     level_to_rate = {}
