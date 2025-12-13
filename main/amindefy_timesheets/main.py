@@ -62,9 +62,9 @@ def amindefy_timesheet(filename: str, timesheet_folder: str, output_wb: Workbook
                 enhanced = True
             
             # Replace RATE by RATE_EN or GALA by GALA_EN if it's an enhanced timesheet
-            if enhanced and isinstance(cell.value, str) and 'RATE' in cell.value:
+            if enhanced and isinstance(cell.value, str) and 'RATE' in cell.value and 'VLOOKUP' in cell.value:
                 new_cell = output_ws.cell(row=cell.row, column=cell.column, value=cell.value.replace('RATE', 'RATE_EN'))
-            elif enhanced and isinstance(cell.value, str) and 'GALA' in cell.value:
+            elif enhanced and isinstance(cell.value, str) and 'GALA' in cell.value and 'VLOOKUP' in cell.value:
                 new_cell = output_ws.cell(row=cell.row, column=cell.column, value=cell.value.replace('GALA', 'GALA_EN'))
             else:
                 new_cell = output_ws.cell(row=cell.row, column=cell.column, value=cell.value)
