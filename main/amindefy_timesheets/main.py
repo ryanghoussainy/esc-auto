@@ -3,6 +3,9 @@ from openpyxl import Workbook, load_workbook
 from openpyxl.styles import PatternFill
 from copy import copy
 
+# flag to control sheet protection copying
+PROTECT_SHEET = False
+
 def amindefy_timesheets(timesheet_folder: str, output_file: str, progress_callback, error_callback):
     """
     Combines Excel files into one workbook while preserving ALL formatting,
@@ -19,6 +22,8 @@ def amindefy_timesheets(timesheet_folder: str, output_file: str, progress_callba
                 continue
             
             amindefy_timesheet(filename, timesheet_folder, output_wb)
+
+            progress_callback(f"Added timesheet: {filename}\n")
         
         # Save the output workbook
         output_wb.save(output_file)
@@ -56,7 +61,13 @@ def amindefy_timesheet(filename: str, timesheet_folder: str, output_wb: Workbook
             if isinstance(cell.value, str) and 'enhanced' in cell.value.lower():
                 enhanced = True
             
-            new_cell = output_ws.cell(row=cell.row, column=cell.column, value=cell.value)
+            # Replace RATE by RATE_EN or GALA by GALA_EN if it's an enhanced timesheet
+            if enhanced and isinstance(cell.value, str) and 'RATE' in cell.value:
+                new_cell = output_ws.cell(row=cell.row, column=cell.column, value=cell.value.replace('RATE', 'RATE_EN'))
+            elif enhanced and isinstance(cell.value, str) and 'GALA' in cell.value:
+                new_cell = output_ws.cell(row=cell.row, column=cell.column, value=cell.value.replace('GALA', 'GALA_EN'))
+            else:
+                new_cell = output_ws.cell(row=cell.row, column=cell.column, value=cell.value)
             
             # Copy all cell styling
             if cell.has_style:
@@ -73,7 +84,8 @@ def amindefy_timesheet(filename: str, timesheet_folder: str, output_wb: Workbook
                         new_cell.fill = copy(cell.fill)
 
                 new_cell.number_format = copy(cell.number_format)
-                new_cell.protection = copy(cell.protection)
+                if PROTECT_SHEET:
+                    new_cell.protection = copy(cell.protection)
                 new_cell.alignment = copy(cell.alignment)
             
             # Copy hyperlinks if present
@@ -114,7 +126,7 @@ def amindefy_timesheet(filename: str, timesheet_folder: str, output_wb: Workbook
     output_ws.print_options = copy(source_ws.print_options)
     
     # Copy sheet protection (if protected)
-    if source_ws.protection.sheet:
+    if PROTECT_SHEET and source_ws.protection.sheet:
         output_ws.protection = copy(source_ws.protection)
     
     # Copy freeze panes
@@ -146,25 +158,27 @@ def amindefy_timesheet(filename: str, timesheet_folder: str, output_wb: Workbook
     for table in source_ws.tables.values():
         output_ws.add_table(copy(table))
     
-    # Copy named ranges (workbook-level)
-    if enhanced:
-        for name, named_range in source_wb.defined_names.items():
-            # Create a new named range in the output workbook
-            new_name = copy(named_range)
+    # Copy named ranges for GALA and RATE tables
+    for name, named_range in source_wb.defined_names.items():
+        # Create a new named range in the output workbook
+        new_name = copy(named_range)
 
-            # Update sheet reference to point to the new sheet name
-            if named_range.value:
-                # Replace old sheet name with new sheet name in the reference
-                old_sheet_name = source_ws.title
-                new_reference = named_range.value.replace(f"'{old_sheet_name}'!", f"'{sheet_name}'!")
-                new_reference = new_reference.replace(f"{old_sheet_name}!", f"{sheet_name}!")
-                new_name.value = new_reference
-            
-            if named_range.localSheetId is not None:
-                # Worksheet-level named range - update to new sheet
-                new_name.localSheetId = output_wb.sheetnames.index(sheet_name)
-            
-            # Add to output workbook using dictionary assignment
-            output_wb.defined_names[name] = new_name
+        # If the sheet is enhanced, then change RATE to RATE_EN or GALA to GALA_EN
+        if enhanced:
+            if 'RATE' in name:
+                new_name.name = name.replace('RATE', 'RATE_EN')
+            if 'GALA' in name:
+                new_name.name = name.replace('GALA', 'GALA_EN')
+
+        # Update sheet reference to point to the new sheet name
+        if named_range.value:
+            # Replace old sheet name with new sheet name in the reference
+            old_sheet_name = source_ws.title
+            new_reference = named_range.value.replace(f"'{old_sheet_name}'!", f"'{sheet_name}'!")
+            new_reference = new_reference.replace(f"{old_sheet_name}!", f"{sheet_name}!")
+            new_name.value = new_reference
+        
+        # Add to output workbook using dictionary assignment
+        output_wb.defined_names[new_name.name] = new_name
     
     source_wb.close()
