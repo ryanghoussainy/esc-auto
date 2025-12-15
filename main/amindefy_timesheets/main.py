@@ -47,25 +47,26 @@ def amindefy_timesheet(filename: str, timesheet_folder: str, output_wb: Workbook
     
     # Create sheet name from filename
     sheet_name = os.path.splitext(filename)[0]
+
+    # remove dashes from sheet name
+    sheet_name = sheet_name.replace('-', ' ')
+
+    # get a sheet prefix for named ranges
+    sheet_prefix = sheet_name.replace(' ', '_')
     
     # Use copy_worksheet to get most formatting automatically
     output_ws = output_wb.create_sheet(title=sheet_name)
 
-    # Keep track of whether the timesheet is enhanced or basic
-    enhanced = False
-
     # Copy all cell values and styles
     for row in source_ws.iter_rows():
         for cell in row:
-            # If the cell contains 'enhanced' then it's an enhanced timesheet
-            if isinstance(cell.value, str) and 'enhanced' in cell.value.lower():
-                enhanced = True
-            
-            # Replace RATE by RATE_EN or GALA by GALA_EN if it's an enhanced timesheet
-            if enhanced and isinstance(cell.value, str) and 'RATE' in cell.value and 'VLOOKUP' in cell.value:
-                new_cell = output_ws.cell(row=cell.row, column=cell.column, value=cell.value.replace('RATE', 'RATE_EN'))
-            elif enhanced and isinstance(cell.value, str) and 'GALA' in cell.value and 'VLOOKUP' in cell.value:
-                new_cell = output_ws.cell(row=cell.row, column=cell.column, value=cell.value.replace('GALA', 'GALA_EN'))
+            # Replace RATE and GALA by sheet-specific named ranges
+            if isinstance(cell.value, str) and 'RATE' in cell.value and 'VLOOKUP' in cell.value:
+                updated_value = cell.value.replace('RATE', f'{sheet_prefix}_RATE')
+                new_cell = output_ws.cell(row=cell.row, column=cell.column, value=updated_value)
+            elif isinstance(cell.value, str) and 'GALA' in cell.value and 'VLOOKUP' in cell.value:
+                updated_value = cell.value.replace('GALA', f'{sheet_prefix}_GALA')
+                new_cell = output_ws.cell(row=cell.row, column=cell.column, value=updated_value)
             else:
                 new_cell = output_ws.cell(row=cell.row, column=cell.column, value=cell.value)
             
@@ -160,23 +161,31 @@ def amindefy_timesheet(filename: str, timesheet_folder: str, output_wb: Workbook
     
     # Copy named ranges for GALA and RATE tables
     for name, named_range in source_wb.defined_names.items():
+        # Ignore all non GALA and RATE named ranges
+        if not (('GALA' in name) or ('RATE' in name)):
+            continue
+
         # Create a new named range in the output workbook
         new_name = copy(named_range)
 
-        # If the sheet is enhanced, then change RATE to RATE_EN or GALA to GALA_EN
-        if enhanced:
-            if 'RATE' in name:
-                new_name.name = name.replace('RATE', 'RATE_EN')
-            if 'GALA' in name:
-                new_name.name = name.replace('GALA', 'GALA_EN')
+        # Update the named ranges to be unique per sheet
+        new_name.name = f"{sheet_prefix}_{name}"
 
         # Update sheet reference to point to the new sheet name
         if named_range.value:
             # Replace old sheet name with new sheet name in the reference
             old_sheet_name = source_ws.title
-            new_reference = named_range.value.replace(f"'{old_sheet_name}'!", f"'{sheet_name}'!")
-            new_reference = new_reference.replace(f"{old_sheet_name}!", f"{sheet_name}!")
-            new_name.value = new_reference
+
+            # sheet name must be quoted if it contains spaces
+            if ' ' in old_sheet_name:
+                old_sheet_name = f"'{old_sheet_name}'"
+            if ' ' in sheet_name:
+                quoted_sheet_name = f"'{sheet_name}'"
+            
+            new_name.value = named_range.value.replace(old_sheet_name, quoted_sheet_name)
+
+        # Make the named range local to the new sheet
+        new_name.localSheetId = output_wb.sheetnames.index(sheet_name)
         
         # Add to output workbook using dictionary assignment
         output_wb.defined_names[new_name.name] = new_name
