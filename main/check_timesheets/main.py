@@ -66,15 +66,19 @@ def read_timesheet(df) -> tuple[str, list[Entry]]:
         # Get start time and end time
         start_time = row[START_TIME_COL]
         end_time = row[END_TIME_COL]
-        if pd.isna(start_time) or pd.isna(end_time):
+        # error if either is nan and we are not a house event
+        if (pd.isna(start_time) or pd.isna(end_time)) and not is_event(row[LEVEL_COL]):
             raise ValueError(f"Missing start or end time for {name} on {row[DATE_COL]}")
         
         # Calculate hours worked
-        end_hours = end_time.hour + end_time.minute / 60
-        start_hours = start_time.hour + start_time.minute / 60
-        hours_worked = end_hours - start_hours
-        if hours_worked <= 0:
-            raise ValueError(f"End time must be after start time for {name} on {row[DATE_COL]}")
+        if is_event(row[LEVEL_COL]):
+            hours_worked = 0.0
+        else:
+            end_hours = end_time.hour + end_time.minute / 60
+            start_hours = start_time.hour + start_time.minute / 60
+            hours_worked = end_hours - start_hours
+            if hours_worked <= 0:
+                raise ValueError(f"End time must be after start time for {name} on {row[DATE_COL]}")
 
         # Get house - if it's not acton then skip
         house = row[HOUSE_COL]

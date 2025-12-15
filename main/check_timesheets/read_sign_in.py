@@ -2,10 +2,17 @@ import pandas as pd
 from collections import defaultdict
 
 from reusables.entry import Entry
-from reusables.events import is_event
 
 NAME_COL = "Name"
 LEVEL_COL = "Level"
+
+def is_event(hours: str) -> bool:
+    """
+    Determine if the entry is a house event based on the hours cell.
+    Note: this is only in the sign in sheet. For the timesheets, it's a level.
+    """
+    return isinstance(hours, str) and 'event' in hours.lower()
+
 
 def read_sign_in_sheet(month: str, file_path: str, rates: dict[str, float], rates_after: dict[str, float] | None, rate_change_date: str | None) -> dict[str, set[Entry]]:
     """
@@ -31,20 +38,42 @@ def read_sign_in_sheet(month: str, file_path: str, rates: dict[str, float], rate
             if rate_change_date and rates_after:
                 try:
                     if col.date() >= pd.to_datetime(rate_change_date, format="%d/%m/%Y").date():
-                        rate = rates_after[row[LEVEL_COL]]
+                        # if it's a house event, then use the house event rate
+                        if is_event(row[col]):
+                            rate = rates_after["House Event"]
+                        else:
+                            rate = rates_after[row[LEVEL_COL]]
                     else:
-                        rate = rates[row[LEVEL_COL]]
+                        # if it's a house event, then use the house event rate
+                        if is_event(row[col]):
+                            rate = rates["House Event"]
+                        else:
+                            rate = rates[row[LEVEL_COL]]
                 except ValueError:
                     raise ValueError(f"Rate change date {rate_change_date} is in invalid format. It must be in DD/MM/YYYY format.")
             else:
-                rate = rates[row[LEVEL_COL]]
+                # if it's a house event, then use the house event rate
+                if is_event(row[col]):
+                    rate = rates["House Event"]
+                else:
+                    rate = rates[row[LEVEL_COL]]
 
-            entry = Entry(
-                date=col.date(),
-                hours=float(row[col]),
-                rate=rate,
-                is_event=is_event(row[LEVEL_COL])
-            )
+            if is_event(row[col]):
+                # handle house events ('House Event' in the hours cell)
+                entry = Entry(
+                    date=col.date(),
+                    hours=0.0, # does not matter
+                    rate=rate,
+                    is_event=True
+                )
+            else:
+                # non house event entry
+                entry = Entry(
+                    date=col.date(),
+                    hours=float(row[col]),
+                    rate=rate,
+                    is_event=False
+                )
             sign_in_sheet_data[name].add(entry)
 
     return sign_in_sheet_data

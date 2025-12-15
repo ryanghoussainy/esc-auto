@@ -49,7 +49,7 @@ def amindefy_timesheet(filename: str, timesheet_folder: str, output_wb: Workbook
     sheet_name = os.path.splitext(filename)[0]
 
     # remove dashes from sheet name
-    sheet_name = sheet_name.replace('-', ' ')
+    sheet_name = sheet_name.replace('-', ' ').replace('&', 'and')
 
     # get a sheet prefix for named ranges
     sheet_prefix = sheet_name.replace(' ', '_')
