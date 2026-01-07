@@ -162,11 +162,15 @@ class SwimmingResultsApp:
         self.setup_house_champs_app(self.house_champs_frame)
 
         # Show timesheet checker app by default
-        self.current_app = 0
+        self.current_app = None # we initialise this to None to prevent early returning from switch_app(0)
         self.switch_app(0)
     
     def switch_app(self, app_index):
         """Switch between the two apps"""
+        # If already on the selected app, do nothing
+        if self.current_app == app_index:
+            return
+        
         self.current_app = app_index
         
         # Hide both frames
