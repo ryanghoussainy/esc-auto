@@ -48,8 +48,8 @@ class SwimmingResultsApp:
         self.root.geometry("1200x1000")
         self.root.configure(bg=APP_BACKGROUND)
 
-        # Setup modern styles
-        self.setup_modern_styles()
+        # Setup styles
+        self.setup_styles()
         
         # File paths storage
         self.file_paths = {
@@ -188,7 +188,7 @@ class SwimmingResultsApp:
     def setup_house_champs_app(self, parent):
         """Setup the Auto House Champs app"""
         # Create main container with paned window
-        main_paned = ttk.PanedWindow(parent, orient=tk.HORIZONTAL, style="Modern.TFrame")
+        main_paned = ttk.PanedWindow(parent, orient=tk.HORIZONTAL, style="TFrame")
         main_paned.pack(expand=True, fill='both')
         
         # Left side - Controls
@@ -200,7 +200,7 @@ class SwimmingResultsApp:
         main_paned.add(right_frame, weight=1)
         
         # Create notebook for tabs on left side
-        self.house_champs_notebook = ttk.Notebook(left_frame, style="Modern.TNotebook")
+        self.house_champs_notebook = ttk.Notebook(left_frame, style="TNotebook")
         self.house_champs_notebook.pack(expand=True, fill='both', padx=10)
         
         # Tab 1: Leahify Qualifiers
@@ -218,7 +218,7 @@ class SwimmingResultsApp:
     def setup_timesheet_checker_app(self, parent):
         """Setup Auto Timesheet Checker app"""
         # Create main container with paned window
-        main_paned = ttk.PanedWindow(parent, orient=tk.HORIZONTAL, style="Modern.TFrame")
+        main_paned = ttk.PanedWindow(parent, orient=tk.HORIZONTAL, style="TFrame")
         main_paned.pack(expand=True, fill='both')
         
         # Left side - Controls
@@ -230,7 +230,7 @@ class SwimmingResultsApp:
         main_paned.add(right_frame, weight=1)
         
         # Create notebook for tabs on left side
-        self.timesheet_checker_notebook = ttk.Notebook(left_frame, style="Modern.TNotebook")
+        self.timesheet_checker_notebook = ttk.Notebook(left_frame, style="TNotebook")
         self.timesheet_checker_notebook.pack(expand=True, fill='both', padx=10)
 
         # Tab 1: Folder Processing
@@ -245,23 +245,23 @@ class SwimmingResultsApp:
         # Output panel on right side
         self.create_timesheet_output_panel(right_frame)
 
-    def setup_modern_styles(self):
-        # Configure modern ttk styles
+    def setup_styles(self):
+        # Configure ttk styles
         style = ttk.Style()
         
-        # Configure modern frame style
+        # Configure frame style
         style.configure(
-            'Modern.TFrame',
+            'TFrame',
             background=FRAME_BACKGROUND,
             relief='flat'
         )
         
-        # Configure modern notebook style
+        # Configure notebook style
         style.configure(
-            'Modern.TNotebook'
+            'TNotebook'
         )
         style.configure(
-            'Modern.TNotebook.Tab',
+            'TNotebook.Tab',
             padding=(20, 10),
             font=('Segoe UI', 12)
         )
@@ -284,7 +284,7 @@ class SwimmingResultsApp:
         )
         self.house_champs_output_text.pack(expand=True, fill='both', padx=10)
         
-        # Configure modern colour tags
+        # Configure colour tags
         self.house_champs_output_text.tag_configure("red", foreground=RED)
         self.house_champs_output_text.tag_configure("yellow", foreground=YELLOW)
         self.house_champs_output_text.tag_configure("green", foreground=GREEN)
@@ -307,7 +307,7 @@ class SwimmingResultsApp:
         )
         self.timesheet_output_text.pack(expand=True, fill='both', padx=10)
         
-        # Configure modern colour tags
+        # Configure colour tags
         self.timesheet_output_text.tag_configure("red", foreground=RED)
         self.timesheet_output_text.tag_configure("yellow", foreground=YELLOW)
         self.timesheet_output_text.tag_configure("green", foreground=GREEN)
@@ -759,7 +759,7 @@ class SwimmingResultsApp:
             rates_after_raw = data.get("rates_after", None)
             rates_after = None if rates_after_raw is None else {str(k): float(v) for k, v in rates_after_raw.items()}
             rate_change_date = data.get("rate_change_date", None)
-            
+
             return rates, rates_after, rate_change_date
         except Exception:
             return {level: 0.0 for level in RATE_LEVELS}, None, None
