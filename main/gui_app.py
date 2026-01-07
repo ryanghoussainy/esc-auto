@@ -759,12 +759,7 @@ class SwimmingResultsApp:
             rates_after_raw = data.get("rates_after", None)
             rates_after = None if rates_after_raw is None else {str(k): float(v) for k, v in rates_after_raw.items()}
             rate_change_date = data.get("rate_change_date", None)
-            # If file contained only a flat dict (older format), treat that as rates (back-compat)
-            if not rates:
-                # check if top-level keys look like rate levels (flat mapping)
-                flat_candidate = {str(k): float(v) for k, v in data.items() if k not in ("rates_after", "rate_change_date")}
-                if flat_candidate:
-                    return flat_candidate, None, None
+            
             return rates, rates_after, rate_change_date
         except Exception:
             return {level: 0.0 for level in RATE_LEVELS}, None, None
