@@ -1,6 +1,6 @@
 import pandas as pd
 from reusables import match_swimmer, parse_name, normalise_time, read_pdf
-from discrepancies import display_discrepancies, TimeDiscrepancy, SwimmerNotFound
+from discrepancies import display_discrepancies, TimeDiscrepancy, SwimmersNotFound
 
 def get_finals_tables(finals_file):
     """
@@ -138,7 +138,7 @@ def check_finals(
                 else:
                     # If no swimmer was found, we have a discrepancy
                     # We don't have the swimmer's name in Sammy's format so we use the pdf name.
-                    discrepancies.append(SwimmerNotFound(pdf_name))
+                    discrepancies.append(SwimmersNotFound([pdf_name]))
 
         progress_callback("✅ FINALS CHECK COMPLETED!", "green")
 

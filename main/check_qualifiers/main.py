@@ -1,7 +1,7 @@
 import pandas as pd
 from leahify_qualifiers import get_leah_tables, TIME_COLUMN_INDEX
 from reusables import match_swimmer, get_event_name, parse_name, normalise_time, read_pdf, rename_final_column
-from discrepancies import display_discrepancies, TimeDiscrepancy, SwimmerNotFound
+from discrepancies import display_discrepancies, TimeDiscrepancy, SwimmersNotFound
 
 
 def clean_name(name):
@@ -120,9 +120,9 @@ def check_qualifiers(
 
                     # If the swimmer is not found in the PDF results
                     else:
-                        discrepancies.append(SwimmerNotFound(name))
+                        discrepancies.append(SwimmersNotFound([name]))
                 else:
-                    discrepancies.append(SwimmerNotFound(name))
+                    discrepancies.append(SwimmersNotFound([name]))
 
             # Reset indexes of the table
             pdf_table.reset_index(drop=True, inplace=True)
@@ -183,11 +183,10 @@ def check_qualifiers(
                 else:
                     # If we didn't find a swimmer, we have a mismatch
                     # We don't know the name of the swimmer, so we just use the PDF name
-                    discrepancies.append(SwimmerNotFound(pdf_name))
+                    discrepancies.append(SwimmersNotFound([pdf_name]))
             # If there are any swimmers left in the pdf table, they are extra rows
-            # We can just add them to the leah_extra_rows DataFrame
             if not pdf_table.empty:
-                raise Exception(f"Some swimmers were not matched in the PDF table for event {event_name}. This is likely due to a mismatch in the swimmer's name or time. Please check the PDF results and the Leah output table.")
+                discrepancies.append(SwimmersNotFound(pdf_table['Name'].apply(clean_name).tolist(), pdf=False))
 
         progress_callback("✅ QUALIFIER CHECK COMPLETED!", "green")
 

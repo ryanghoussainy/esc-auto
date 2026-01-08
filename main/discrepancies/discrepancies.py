@@ -1,7 +1,13 @@
-
 def display_discrepancies(discrepancies, progress_callback):
-    # sort discrepancies by 1. if there is no name attribute, 2. by name attribute, 3. by entry date if applicable
-    discrepancies.sort(key=lambda d: (not hasattr(d, 'name'), d.name, d.entry.date if hasattr(d, 'entry') else None))
+    # sort discrepancies by 1. if there is no name/names attribute, 2. by name/names attribute, 3. by entry date if applicable
+    def get_name(d):
+        if hasattr(d, 'name'):
+            return d.name
+        elif hasattr(d, 'names'):
+            return d.names
+        return ''
+    
+    discrepancies.sort(key=lambda d: (not (hasattr(d, 'name') or hasattr(d, 'names')), get_name(d), d.entry.date if hasattr(d, 'entry') else None))
 
     if discrepancies:
 

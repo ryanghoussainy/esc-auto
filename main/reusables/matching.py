@@ -135,9 +135,9 @@ def match_swimmer(
     )
     
     if not scores:
-        error_msg = f"No potential matches found for: {lfirst_name.capitalize()} {lsurname.capitalize()}"
+        error_msg = f"No potential matches found in qualifiers table for: {lfirst_name.capitalize()} {lsurname.capitalize()}"
         progress_callback(error_msg, "red")
-        raise ValueError(error_msg)
+        return pd.DataFrame()
     
     first_candidate = scores[0]
 

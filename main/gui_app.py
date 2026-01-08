@@ -60,7 +60,9 @@ class SwimmingResultsApp:
             'full_results_pdf': None,
             'timesheets_folder': None,
             'amindefied_excel': None,
-            'sign_in_sheet': None
+            'sign_in_sheet': None,
+            'amindefy_output_file': None,
+            'leahify_output_file': None,
         }
 
         self.current_confirmation = None
@@ -533,7 +535,7 @@ class SwimmingResultsApp:
         self.create_file_input(frame, "Leah's Template EXCEL", 'leah_template', [('Excel files', '*.xls *.xlsx')])
 
         # Output file selection
-        self.create_output_file_input(frame, "Output EXCEL", 'output_file', [('Excel files', '*.xlsx')], 'output.xlsx')
+        self.create_output_file_input(frame, "Output EXCEL", 'leahify_output_file', [('Excel files', '*.xlsx')], 'output.xlsx')
         
         # Process button
         process_btn = Button(
@@ -621,7 +623,7 @@ class SwimmingResultsApp:
         self.create_folder_input(frame, "Timesheets Folder", 'timesheets_folder')
 
         # Output file selection
-        self.create_output_file_input(frame, "Output Excel File", 'output_file', [('Excel files', '*.xlsx')], 'all_timesheets.xlsx')
+        self.create_output_file_input(frame, "Output Excel File", 'amindefy_output_file', [('Excel files', '*.xlsx')], 'all_timesheets.xlsx')
         
         # Process button
         process_btn = Button(
@@ -1009,8 +1011,8 @@ class SwimmingResultsApp:
             messagebox.showerror("Error", "Please select both required files")
             return
         
-        # Get output path or use default
-        output_path = self.file_paths.get('output_file', 'output.xlsx')
+        # Get output path or use default (use the Leahify-specific key)
+        output_path = self.file_paths.get('leahify_output_file', 'output.xlsx')
         
         def process():
             try:
@@ -1132,7 +1134,7 @@ class SwimmingResultsApp:
                 # Call backend
                 amindefy_timesheets(
                     self.file_paths['timesheets_folder'],
-                    self.file_paths.get('output_file', 'all_timesheets.xlsx'),
+                    self.file_paths.get('amindefy_output_file', 'all_timesheets.xlsx'),
                     progress_callback,
                     error_callback
                 )

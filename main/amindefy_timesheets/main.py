@@ -179,6 +179,8 @@ def amindefy_timesheet(filename: str, timesheet_folder: str, output_wb: Workbook
             # sheet name must be quoted if it contains spaces
             if ' ' in old_sheet_name:
                 old_sheet_name = f"'{old_sheet_name}'"
+            
+            quoted_sheet_name = sheet_name
             if ' ' in sheet_name:
                 quoted_sheet_name = f"'{sheet_name}'"
             
