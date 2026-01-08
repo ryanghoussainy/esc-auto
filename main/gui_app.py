@@ -1,4 +1,4 @@
-__version__ = "1.0.0" # Major.Minor.Patch
+__version__ = "1.0.4" # Major.Minor.Patch
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
@@ -64,8 +64,6 @@ class SwimmingResultsApp:
             'amindefy_output_file': None,
             'leahify_output_file': None,
         }
-
-        self.current_confirmation = None
         
         self.setup_ui()
 
@@ -369,14 +367,8 @@ class SwimmingResultsApp:
         result_queue = queue.Queue()
         
         def show_dialog():
-            if self.current_confirmation:
-                # If there's already a dialog, wait for it
-                result_queue.put("wait")
-                return
-            
             # Create custom dialog
             dialog = tk.Toplevel(self.root)
-            self.current_confirmation = dialog
             
             dialog.title("Confirm Swimmer Match")
             dialog.resizable(False, False)
@@ -443,22 +435,18 @@ class SwimmingResultsApp:
             
             def accept():
                 result_queue.put("y")
-                self.current_confirmation = None
                 dialog.destroy()
             
             def deny():
                 result_queue.put("n")
-                self.current_confirmation = None
                 dialog.destroy()
             
             def ignore():
                 result_queue.put("ignore")
-                self.current_confirmation = None
                 dialog.destroy()
             
             def cancel():
                 result_queue.put("exit")
-                self.current_confirmation = None
                 dialog.destroy()
             
             # Bind close event
@@ -506,13 +494,11 @@ class SwimmingResultsApp:
         
         # Wait for result
         while True:
+            # we use a try-except block to avoid blocking. The timeout is convenient and allows us to check periodically.
             try:
-                result = result_queue.get(timeout=0.1)
-                if result == "wait":
-                    continue
+                result = result_queue.get(timeout=0.1) # check for result every 100ms
                 return result
             except queue.Empty:
-                # Keep the main thread responsive
                 continue
     
     def create_leahify_tab(self):
