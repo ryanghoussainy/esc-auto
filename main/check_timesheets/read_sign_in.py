@@ -1,7 +1,8 @@
 import pandas as pd
 from collections import defaultdict
 
-from reusables.entry import Entry, is_event_sign_in
+from reusables.entry import Entry
+from reusables.events import is_event
 
 NAME_COL = "Name"
 LEVEL_COL = "Level"
@@ -32,13 +33,13 @@ def read_sign_in_sheet(month: str, file_path: str, rates: dict[str, float], rate
                 try:
                     if col.date() >= pd.to_datetime(rate_change_date, format="%d/%m/%Y").date():
                         # if it's a house event, then use the house event rate
-                        if is_event_sign_in(row[col]):
+                        if is_event(row[col]):
                             rate = rates_after["House Event"]
                         else:
                             rate = rates_after[row[LEVEL_COL]]
                     else:
                         # if it's a house event, then use the house event rate
-                        if is_event_sign_in(row[col]):
+                        if is_event(row[col]):
                             rate = rates["House Event"]
                         else:
                             rate = rates[row[LEVEL_COL]]
@@ -46,12 +47,12 @@ def read_sign_in_sheet(month: str, file_path: str, rates: dict[str, float], rate
                     raise ValueError(f"Rate change date {rate_change_date} is in invalid format. It must be in DD/MM/YYYY format.")
             else:
                 # if it's a house event, then use the house event rate
-                if is_event_sign_in(row[col]):
+                if is_event(row[col]):
                     rate = rates["House Event"]
                 else:
                     rate = rates[row[LEVEL_COL]]
 
-            if is_event_sign_in(row[col]):
+            if is_event(row[col]):
                 # handle house events ('House Event' in the hours cell)
                 entry = Entry(
                     date=col.date(),
