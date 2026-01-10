@@ -29,3 +29,6 @@ timesheets/
 
 # Instructions
 instructions/
+
+# Pytest
+.coverage

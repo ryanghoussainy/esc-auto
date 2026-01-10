@@ -316,6 +316,9 @@ def restore_final_column(output_table: pd.DataFrame):
         output_table.iloc[idx + 1, TIME_COLUMN_INDEX] = "Finals"
 
 def add_time_column(leah_tables: list[pd.DataFrame]):
+    """
+    Sometimes Leah's template does not have a Time column, so we add it.
+    """
     for leah_table in leah_tables:
         if leah_table.columns[TIME_COLUMN_INDEX] not in ["Time", "Finals"]:
             leah_table.insert(TIME_COLUMN_INDEX, "Time", "")

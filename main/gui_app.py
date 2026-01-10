@@ -16,6 +16,7 @@ from check_qualifiers import check_qualifiers
 from check_finals import check_finals
 from amindefy_timesheets import amindefy_timesheets
 from check_timesheets import check_timesheets
+from constants import MONTHS, RATE_LEVELS
 from colours import *
 
 # Get different path depending on Windows vs Mac
@@ -29,17 +30,6 @@ def get_rates_file_path():
         raise NotImplementedError(f"Unsupported OS: {system}")
 
 RATES_FILE = get_rates_file_path()
-
-RATE_LEVELS = [
-    "L1", "NQL2", "L2", "Enhanced L2", "Lower Enhanced L2",
-    "Safeguarding", "Admin", "Gala Full Day", "Gala Half Day", "House Event"
-]
-
-# The months considered for timesheets. The swimming year is September-July
-MONTHS = [
-    "September", "October", "November", "December", "January",
-    "February", "March", "April", "May", "June", "July"
-]
 
 class SwimmingResultsApp:
     def __init__(self, root):
