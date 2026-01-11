@@ -32,3 +32,6 @@ instructions/
 
 # Pytest
 .coverage
+
+# VSCode settings
+.vscode/
