@@ -16,11 +16,20 @@ def amindefy_timesheets(timesheet_folder: str, output_file: str, progress_callba
         output_wb = Workbook()
         output_wb.remove(output_wb.active)  # Remove default sheet
         
-        for filename in os.listdir(timesheet_folder):
-            # Skip non-Excel files
-            if not filename.endswith(".xlsx"):
-                continue
+        # Get all Excel files to sort by cleaned name
+        excel_files = [f for f in os.listdir(timesheet_folder) if f.endswith(".xlsx")]
+        
+        def clean_filename(filename):
+            """Remove useless info to sort by employee name"""
+            to_delete = ["L1", "ENL2", "NQL2", "L2", "and", "&"] # Note: L2 must be after NQL2 and ENL2
             
+            sort_key = filename
+            for item in to_delete:
+                sort_key = sort_key.replace(item, "")
+
+            return sort_key.strip().lower()
+        
+        for filename in sorted(excel_files, key=clean_filename):
             amindefy_timesheet(filename, timesheet_folder, output_wb)
 
             progress_callback(f"Added timesheet: {filename}\n")
