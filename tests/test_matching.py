@@ -30,7 +30,7 @@ def test_match_swimmer_automatic():
     swimmer = match_swimmer(
         "jane", "doe", df, automatic, manual,
         progress_callback=mock_progress_callback,
-        confirm_callback=lambda data: "n"
+        confirm_callback=lambda data: {"action": "ignore"}
     )
     assert not swimmer.empty
     assert swimmer.iloc[0]["First name"] == "jane"
@@ -45,7 +45,11 @@ def test_match_swimmer_manual():
     swimmer = match_swimmer(
         "jon", "smyth", df, automatic, manual,
         progress_callback=mock_progress_callback,
-        confirm_callback=lambda data: "y"
+        confirm_callback=lambda data: {
+            "action": "accept",
+            "sfirst_name": "john",
+            "ssurname": "smith",
+        }
     )
     assert not swimmer.empty
     assert manual[("jon", "smyth")] == ("john", "smith")
@@ -58,7 +62,7 @@ def test_match_swimmer_ignore():
     swimmer = match_swimmer(
         "jon", "smyth", df, automatic, manual,
         progress_callback=mock_progress_callback,
-        confirm_callback=lambda data: "ignore"
+        confirm_callback=lambda data: {"action": "ignore"}
     )
     assert swimmer.empty
 
@@ -71,5 +75,5 @@ def test_match_swimmer_exit():
         _ = match_swimmer(
             "jon", "smyth", df, automatic, manual,
             progress_callback=mock_progress_callback,
-            confirm_callback=lambda data: "exit"
+            confirm_callback=lambda data: {"action": "exit"}
         )

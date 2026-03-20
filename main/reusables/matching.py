@@ -43,38 +43,59 @@ def prompt_manual_match(
     """
     progress_callback(f"Trying to match... {lfirst_name.capitalize()} {lsurname.capitalize()}", "yellow")
 
-    for sfirst_name, ssurname, score in scores:
-        match_data = {
-            'leah_name': f"{lfirst_name.capitalize()} {lsurname.capitalize()}",
-            'sammy_name': f"{sfirst_name.capitalize()} {ssurname.capitalize()}",
-            'similarity': score
+    candidates = [
+        {
+            "sfirst_name": sfirst_name,
+            "ssurname": ssurname,
+            "sammy_name": f"{sfirst_name.capitalize()} {ssurname.capitalize()}",
+            "similarity": score,
         }
+        for sfirst_name, ssurname, score in scores
+    ]
 
-        match = confirm_callback(match_data)
-        
-        # Handle response
-        if match.lower() == 'exit':
-            raise KeyboardInterrupt("User cancelled operation")
+    match_data = {
+        "mode": "manual_match_list",
+        "leah_name": f"{lfirst_name.capitalize()} {lsurname.capitalize()}",
+        "leah_first_name": lfirst_name,
+        "leah_surname": lsurname,
+        "candidates": candidates,
+    }
 
-        if match.lower() == 'ignore':
-            progress_callback(f"Ignored swimmer: {lfirst_name.capitalize()} {lsurname.capitalize()}", "yellow")
+    response = confirm_callback(match_data)
+
+    if not isinstance(response, dict):
+        raise ValueError("confirm_callback must return a dict with an 'action' field")
+
+    action = str(response.get("action", "")).lower()
+
+    if action == "exit":
+        raise KeyboardInterrupt("User cancelled operation")
+
+    if action == "ignore":
+        progress_callback(f"Ignored swimmer: {lfirst_name.capitalize()} {lsurname.capitalize()}", "yellow")
+        return pd.DataFrame()
+
+    if action == "accept":
+        sfirst_name = response.get("sfirst_name")
+        ssurname = response.get("ssurname")
+
+        if not sfirst_name or not ssurname:
+            progress_callback("Manual match cancelled (missing selected swimmer).", "yellow")
             return pd.DataFrame()
 
-        if match.lower() == 'y':
-            manual_matches[(lfirst_name, lsurname)] = (sfirst_name, ssurname)
-            swimmer = qualifiers_table[
-                (qualifiers_table[sfirst_name_col] == sfirst_name) &
-                (qualifiers_table[ssurname_col] == ssurname)
-            ]
-            progress_callback(f"Manual match confirmed: {lfirst_name.capitalize()} {lsurname.capitalize()} -> {sfirst_name.capitalize()} {ssurname.capitalize()}", "green")
-            return swimmer
-        
-        progress_callback(f"Match rejected, trying next candidate...", "yellow")
-    
-    # No matches found
-    error_msg = f"No swimmer found: {lfirst_name.capitalize()} {lsurname.capitalize()}"
-    progress_callback(error_msg, "red")
-    raise ValueError(error_msg)
+        manual_matches[(lfirst_name, lsurname)] = (sfirst_name, ssurname)
+        swimmer = qualifiers_table[
+            (qualifiers_table[sfirst_name_col] == sfirst_name) &
+            (qualifiers_table[ssurname_col] == ssurname)
+        ]
+        progress_callback(
+            f"Manual match confirmed: {lfirst_name.capitalize()} {lsurname.capitalize()} -> {str(sfirst_name).capitalize()} {str(ssurname).capitalize()}",
+            "green",
+        )
+        return swimmer
+
+    progress_callback("Manual match cancelled (no decision made).", "yellow")
+    return pd.DataFrame()
 
 
 def match_swimmer(

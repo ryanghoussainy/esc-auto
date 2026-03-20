@@ -364,10 +364,12 @@ class SwimmingResultsApp:
             dialog.resizable(False, False)
             dialog.transient(self.root)
             dialog.grab_set()
-            
-            # Dialog dimensions
-            dialog_width = 500
-            dialog_height = 250
+
+            if data.get("mode") != "manual_match_list":
+                raise ValueError("show_confirmation_dialog expects data['mode'] == 'manual_match_list'")
+
+            dialog_width = 980
+            dialog_height = 680
             
             # Center the dialog
             self.root.update_idletasks()
@@ -380,89 +382,114 @@ class SwimmingResultsApp:
             y = parent_y + (parent_height - dialog_height) // 2
             
             dialog.geometry(f"{dialog_width}x{dialog_height}+{x}+{y}")
-            
-            # Message display
-            msg_frame = tk.Frame(dialog, padx=20, pady=20)
-            msg_frame.pack(expand=True, fill='both')
-            
-            msg_label = tk.Label(
-                msg_frame,
-                text="Are these the same swimmer?",
-                font=("Segoe UI", 14, "bold")
+
+            candidates = list(data.get("candidates", []))
+
+            outer = tk.Frame(dialog, padx=16, pady=14)
+            outer.pack(expand=True, fill='both')
+
+            header = tk.Label(
+                outer,
+                text=f"Manual Match: {data.get('leah_name', 'Unknown swimmer')}",
+                font=("Segoe UI", 14, "bold"),
             )
-            msg_label.pack(pady=(0, 15))
-            
-            # Sammy's swimmer info
-            sammy_label = tk.Label(
-                msg_frame,
-                text=f"(Sammy) {data['sammy_name']}",
-                font=("Segoe UI", 11, "bold"),
+            header.pack(anchor=tk.W, pady=(0, 8))
+
+            subtitle = tk.Label(
+                outer,
+                text="Select a swimmer from the full candidate list. Accept moves to the next swimmer. Undo clears the current selection, or Ignore to skip this swimmer.",
+                font=("Segoe UI", 10),
+                fg=LABEL_FOREGROUND,
+                wraplength=700,
+                justify=tk.LEFT,
             )
-            sammy_label.pack(anchor=tk.W, pady=(0, 5))
-            
-            # Leah's swimmer info
-            leah_label = tk.Label(
-                msg_frame,
-                text=f"(Leah) {data['leah_name']}",
-                font=("Segoe UI", 11, "bold"),
-            )
-            leah_label.pack(anchor=tk.W, pady=(0, 5))
-            
-            # Similarity score
-            similarity = data['similarity']
-            similarity_color = GREEN if similarity >= 80 else YELLOW if similarity >= 50 else RED
-            similarity_label = tk.Label(
-                msg_frame,
-                text=f"Similarity Score: {similarity}%",
-                font=("Segoe UI", 11, "bold"),
-                fg=similarity_color
-            )
-            similarity_label.pack(anchor=tk.W, pady=(0, 15))
-            
-            # Buttons
-            button_frame = tk.Frame(dialog)
-            button_frame.pack(pady=(0, 20))
-            
-            def accept():
-                result_queue.put("y")
-                dialog.destroy()
-            
-            def deny():
-                result_queue.put("n")
-                dialog.destroy()
-            
-            def ignore():
-                result_queue.put("ignore")
-                dialog.destroy()
-            
+            subtitle.pack(anchor=tk.W, pady=(0, 10))
+
+            table_frame = tk.Frame(outer)
+            table_frame.pack(expand=True, fill='both')
+
+            columns = ("sammy_name", "similarity")
+            tree = ttk.Treeview(table_frame, columns=columns, show="headings", selectmode="browse")
+            tree.heading("sammy_name", text="Available Sammy Swimmers")
+            tree.heading("similarity", text="Similarity")
+            tree.column("sammy_name", width=720, anchor=tk.W)
+            tree.column("similarity", width=160, anchor=tk.CENTER)
+
+            scrollbar = ttk.Scrollbar(table_frame, orient="vertical", command=tree.yview)
+            tree.configure(yscrollcommand=scrollbar.set)
+            tree.pack(side=tk.LEFT, expand=True, fill='both')
+            scrollbar.pack(side=tk.RIGHT, fill='y')
+
+            row_by_id = {}
+            for candidate in candidates:
+                row_id = tree.insert(
+                    "",
+                    tk.END,
+                    values=(candidate["sammy_name"], f"{candidate['similarity']}%")
+                )
+                row_by_id[row_id] = candidate
+
+            status_var = tk.StringVar(value="Select a candidate and press Accept.")
+            status_label = tk.Label(outer, textvariable=status_var, fg=LABEL_FOREGROUND, font=("Segoe UI", 10))
+            status_label.pack(anchor=tk.W, pady=(8, 10))
+
+            button_frame = tk.Frame(outer)
+            button_frame.pack(anchor=tk.E)
+
             def cancel():
-                result_queue.put("exit")
+                result_queue.put({"action": "exit"})
                 dialog.destroy()
-            
-            # Bind close event
+
+            def ignore():
+                result_queue.put({"action": "ignore"})
+                dialog.destroy()
+
+            def accept_selected():
+                selected = tree.selection()
+                if not selected:
+                    status_var.set("Select a candidate before accepting.")
+                    return
+
+                candidate = row_by_id[selected[0]]
+                result_queue.put({
+                    "action": "accept",
+                    "sfirst_name": candidate["sfirst_name"],
+                    "ssurname": candidate["ssurname"],
+                })
+                dialog.destroy()
+
+            def undo():
+                selected = tree.selection()
+                if not selected:
+                    status_var.set("Nothing to undo.")
+                    return
+
+                tree.selection_remove(selected[0])
+                status_var.set("Selection cleared.")
+
             dialog.protocol("WM_DELETE_WINDOW", cancel)
-            
+
             accept_btn = Button(
                 button_frame,
-                text="✓ Accept Match",
-                command=accept,
+                text="Accept",
+                command=accept_selected,
                 font=("Segoe UI", 10, "bold"),
                 bg=GREEN,
-                padx=20,
-                pady=8
+                padx=14,
+                pady=8,
             )
             accept_btn.pack(side=tk.LEFT, padx=5)
-            
-            deny_btn = Button(
+
+            undo_btn = Button(
                 button_frame,
-                text="✗ Deny Match",
-                command=deny,
+                text="Undo",
+                command=undo,
                 font=("Segoe UI", 10, "bold"),
-                bg=RED,
-                padx=20,
-                pady=8
+                bg=YELLOW,
+                padx=14,
+                pady=8,
             )
-            deny_btn.pack(side=tk.LEFT, padx=5)
+            undo_btn.pack(side=tk.LEFT, padx=5)
 
             ignore_btn = Button(
                 button_frame,
@@ -470,10 +497,26 @@ class SwimmingResultsApp:
                 command=ignore,
                 font=("Segoe UI", 10, "bold"),
                 bg=YELLOW,
-                padx=20,
-                pady=8
+                padx=14,
+                pady=8,
             )
             ignore_btn.pack(side=tk.LEFT, padx=5)
+
+            cancel_btn = Button(
+                button_frame,
+                text="Cancel",
+                command=cancel,
+                font=("Segoe UI", 10, "bold"),
+                bg=NOTEBOOK_TAB_BACKGROUND,
+                padx=14,
+                pady=8,
+            )
+            cancel_btn.pack(side=tk.LEFT, padx=5)
+
+            first_rows = tree.get_children()
+            if first_rows:
+                tree.selection_set(first_rows[0])
+                tree.focus(first_rows[0])
 
             dialog.deiconify()
             dialog.lift()
@@ -988,7 +1031,7 @@ class SwimmingResultsApp:
             return
         
         # Get output path or use default (use the Leahify-specific key)
-        output_path = self.file_paths.get('leahify_output_file', 'output.xlsx')
+        output_path = self.file_paths.get('leahify_output_file') or 'output.xlsx'
         
         def process():
             try:

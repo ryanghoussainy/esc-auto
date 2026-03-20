@@ -149,7 +149,7 @@ def match_swimmers(
             leah_tables[tableIdx] = leah_tables[tableIdx].astype({time_column_name: str})
             
             # Set the time if it's not nan
-            leah_tables[tableIdx].at[lrowIdx, time_column_name] = time if not pd.isnull(time) else "DNS"
+            leah_tables[tableIdx].at[lrowIdx, time_column_name] = str(time) if not pd.isnull(time) else "DNS"
 
     progress_callback(f"Number of matches: {num_matches}/{total}")
     progress_callback(f"Number of ignored swimmers: {num_ignored}/{total}")
@@ -343,6 +343,8 @@ def leahify_qualifiers(
         error_callback: Called with error messages (str)
     '''
     try:
+        output_path = output_path or "output.xlsx"
+
         progress_callback("Loading qualifier times from Sammy's file...")
         
         # Load qualifier times (Sammy's version)
