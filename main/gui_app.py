@@ -1,4 +1,4 @@
-__version__ = "1.0.4" # Major.Minor.Patch
+__version__ = "1.1.0" # Major.Minor.Patch
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
