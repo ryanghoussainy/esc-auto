@@ -267,7 +267,51 @@ def _build_event_rankings(
     return rankings
 
 
+def _extract_event_lower_age(event_name: str) -> int | None:
+    lower_event = event_name.lower()
+
+    under_match = re.search(r"(\d{1,2})\s*&\s*under", lower_event)
+    if under_match:
+        return 0
+
+    over_match = re.search(r"(\d{1,2})\s*&\s*over", lower_event)
+    if over_match:
+        return int(over_match.group(1))
+
+    range_match = re.search(r"(\d{1,2})\s*[-/]\s*(\d{1,2})", lower_event)
+    if range_match:
+        return int(range_match.group(1))
+
+    return None
+
+
+def _extract_event_gender_rank(event_name: str) -> int:
+    lower_event = event_name.lower()
+    if "girls" in lower_event:
+        return 0
+    if "boys" in lower_event:
+        return 1
+    return 2
+
+
+def _sort_rankings_by_age(rankings: list[EventRanking]) -> list[EventRanking]:
+    indexed = list(enumerate(rankings))
+
+    def sort_key(item: tuple[int, EventRanking]) -> tuple[int, int, int, int]:
+        original_idx, ranking = item
+        lower_age = _extract_event_lower_age(ranking.event_name)
+        gender_rank = _extract_event_gender_rank(ranking.event_name)
+        if lower_age is None:
+            return (1, 0, gender_rank, original_idx)
+        return (0, lower_age, gender_rank, original_idx)
+
+    sorted_indexed = sorted(indexed, key=sort_key)
+    return [ranking for _, ranking in sorted_indexed]
+
+
 def _save_rankings_to_excel(rankings: list[EventRanking], output_path: str) -> None:
+    rankings = _sort_rankings_by_age(rankings)
+
     rows = []
 
     for ranking in rankings:
@@ -275,6 +319,7 @@ def _save_rankings_to_excel(rankings: list[EventRanking], output_path: str) -> N
         rows.append(["Name", "Age", "Seed Time", "Time"])
         for swimmer in ranking.rows:
             rows.append([swimmer.full_name, swimmer.age, swimmer.seed_time, swimmer.time])
+        rows.append(["", "", "", ""])
 
     output_df = pd.DataFrame(rows, columns=["Name", "Age", "Seed Time", "Time"])
 
@@ -318,7 +363,7 @@ def _save_rankings_to_excel(rankings: list[EventRanking], output_path: str) -> N
             for cell in ws[row_idx]:
                 cell.fill = yellow_fill
 
-        event_row_index = first_data_row + len(ranking.rows)
+        event_row_index = first_data_row + len(ranking.rows) + 1
 
     for row in ws.iter_rows(min_row=1, max_row=ws.max_row, min_col=1, max_col=4):
         for cell in row:
