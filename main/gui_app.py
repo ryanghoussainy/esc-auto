@@ -12,6 +12,7 @@ from datetime import datetime
 from PIL import Image, ImageTk
 
 from leahify_qualifiers import leahify_qualifiers
+from generate_rankings import generate_rankings
 from check_qualifiers import check_qualifiers
 from check_finals import check_finals
 from amindefy_timesheets import amindefy_timesheets
@@ -45,6 +46,7 @@ class SwimmingResultsApp:
         self.file_paths = {
             'sammy_qualifiers': None,
             'leah_template': None,
+            'rankings_input_excel': None,
             'heat_results_pdf': None,
             'finals_excel': None,
             'full_results_pdf': None,
@@ -53,6 +55,7 @@ class SwimmingResultsApp:
             'sign_in_sheet': None,
             'amindefy_output_file': None,
             'leahify_output_file': None,
+            'rankings_output_file': None,
         }
         
         self.setup_ui()
@@ -200,10 +203,13 @@ class SwimmingResultsApp:
         # Tab 1: Leahify Qualifiers
         self.create_leahify_tab()
         
-        # Tab 2: Check Qualifiers
+        # Tab 2: Generate Rankings
+        self.create_generate_rankings_tab()
+
+        # Tab 3: Check Qualifiers
         self.create_check_qualifiers_tab()
         
-        # Tab 3: Check Finals
+        # Tab 4: Check Finals
         self.create_check_finals_tab()
 
         # Output panel on right side
@@ -568,7 +574,7 @@ class SwimmingResultsApp:
     
     def create_check_qualifiers_tab(self):
         frame = tk.Frame(self.house_champs_notebook, bg=NOTEBOOK_TAB_BACKGROUND)
-        self.house_champs_notebook.add(frame, text="2. Check Qualifiers")
+        self.house_champs_notebook.add(frame, text="3. Check Qualifiers")
 
         # Instructions
         instructions = tk.Label(
@@ -597,7 +603,7 @@ class SwimmingResultsApp:
     
     def create_check_finals_tab(self):
         frame = tk.Frame(self.house_champs_notebook, bg=NOTEBOOK_TAB_BACKGROUND)
-        self.house_champs_notebook.add(frame, text="3. Check Finals")
+        self.house_champs_notebook.add(frame, text="4. Check Finals")
         
         # Instructions
         instructions = tk.Label(
@@ -619,6 +625,32 @@ class SwimmingResultsApp:
             frame,
             text="Check Finals",
             command=self.run_check_finals,
+            highlightbackground=NOTEBOOK_TAB_BACKGROUND,
+            focusthickness=0,
+        )
+        process_btn.pack(pady=30)
+
+    def create_generate_rankings_tab(self):
+        frame = tk.Frame(self.house_champs_notebook, bg=NOTEBOOK_TAB_BACKGROUND)
+        self.house_champs_notebook.add(frame, text="2. Generate Rankings")
+
+        instructions = tk.Label(
+            frame,
+            text="Generate ranked qualifiers from Leahify output and highlight qualifiers/reserves",
+            font=("Segoe UI", 12),
+            fg=LABEL_FOREGROUND,
+            bg=NOTEBOOK_TAB_BACKGROUND,
+            wraplength=500,
+        )
+        instructions.pack(pady=20)
+
+        self.create_file_input(frame, "Leahify Output EXCEL", 'rankings_input_excel', [('Excel files', '*.xls *.xlsx')])
+        self.create_output_file_input(frame, "Output EXCEL", 'rankings_output_file', [('Excel files', '*.xlsx')], 'qualifiers_rankings.xlsx')
+
+        process_btn = Button(
+            frame,
+            text="Generate Rankings",
+            command=self.run_generate_rankings,
             highlightbackground=NOTEBOOK_TAB_BACKGROUND,
             focusthickness=0,
         )
@@ -1098,6 +1130,37 @@ class SwimmingResultsApp:
             except Exception as e:
                 self.append_output(f"❌ ERROR: {str(e)}", "red")
         
+        threading.Thread(target=process, daemon=True).start()
+
+    def run_generate_rankings(self):
+        if not self.file_paths['rankings_input_excel']:
+            messagebox.showerror("Error", "Please select the Leahify output Excel file")
+            return
+
+        output_path = self.file_paths.get('rankings_output_file') or 'qualifiers_rankings.xlsx'
+
+        def process():
+            try:
+                self.clear_output()
+
+                def progress_callback(message, color=None):
+                    self.append_output(message, color)
+
+                def error_callback(message, color=None):
+                    self.append_output(message, color or "red")
+
+                generate_rankings(
+                    self.file_paths['rankings_input_excel'],
+                    output_path,
+                    progress_callback=progress_callback,
+                    error_callback=error_callback,
+                )
+
+            except KeyboardInterrupt:
+                self.append_output("Operation cancelled by user", "yellow")
+            except Exception as e:
+                self.append_output(f"❌ ERROR: {str(e)}", "red")
+
         threading.Thread(target=process, daemon=True).start()
     
     def run_check_finals(self):
