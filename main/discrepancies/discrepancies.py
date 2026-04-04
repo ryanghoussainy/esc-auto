@@ -4,6 +4,8 @@ from fuzzywuzzy import fuzz
 from .discrepancy_types.empty_timesheet import EmptyTimesheet
 from .discrepancy_types.invalid_name import InvalidName
 from .discrepancy_types.sign_in_extra_entry import SignInExtraEntry
+from .discrepancy_types.swimmer_not_found import SwimmersNotFound
+from .discrepancy_types.time_discrepancy import TimeDiscrepancy
 from .discrepancy_types.timesheet_extra_entry import TimesheetExtraEntry
 
 
@@ -75,9 +77,50 @@ def display_timesheet_discrepancies(discrepancies, progress_callback):
             for entry in entries:
                 progress_callback(f"  - {format_entry(entry)}")
 
+
+def display_house_champs_discrepancies(discrepancies, progress_callback):
+    time_mismatches = [d for d in discrepancies if isinstance(d, TimeDiscrepancy)]
+    swimmers_missing = [d for d in discrepancies if isinstance(d, SwimmersNotFound)]
+    unique_swimmers_missing = list(dict.fromkeys((issue.names, issue.pdf) for issue in swimmers_missing))
+
+    progress_callback(f"Mismatches found: {len(discrepancies)}", "red")
+    progress_callback("Summary by category:", "yellow")
+    progress_callback(f"- Time mismatches: {len(time_mismatches)}")
+    progress_callback(f"- Missing swimmers: {len(unique_swimmers_missing)}")
+
+    if time_mismatches:
+        progress_callback("")
+        progress_callback("Time mismatches:", "yellow")
+        for issue in sorted(time_mismatches, key=lambda d: (d.event_name.lower(), d.name.lower())):
+            progress_callback(str(issue))
+
+    if unique_swimmers_missing:
+        progress_callback("")
+        progress_callback("Missing swimmers:", "yellow")
+        for names, source in unique_swimmers_missing:
+            progress_callback(f"Swimmers {names} not found in {source}")
+
 def display_discrepancies(discrepancies, progress_callback):
     if not discrepancies:
         progress_callback("No mismatches found.", "green")
         return
-    
-    display_timesheet_discrepancies(discrepancies, progress_callback)
+
+    # Route output formatting based on discrepancy class so both apps print useful details.
+    timesheet_types = (InvalidName, EmptyTimesheet, TimesheetExtraEntry, SignInExtraEntry)
+    house_champs_types = (TimeDiscrepancy, SwimmersNotFound)
+
+    has_timesheet = any(isinstance(d, timesheet_types) for d in discrepancies)
+    has_house_champs = any(isinstance(d, house_champs_types) for d in discrepancies)
+
+    if has_timesheet:
+        display_timesheet_discrepancies(discrepancies, progress_callback)
+
+    if has_house_champs:
+        if has_timesheet:
+            progress_callback("")
+        display_house_champs_discrepancies(discrepancies, progress_callback)
+
+    if not has_timesheet and not has_house_champs:
+        progress_callback(f"Mismatches found: {len(discrepancies)}", "red")
+        for discrepancy in discrepancies:
+            progress_callback(str(discrepancy))

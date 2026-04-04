@@ -48,6 +48,21 @@ def parse_name(name: str) -> tuple[str, str]:
     else:
         raise ValueError(f"Invalid name: {name}")
     
+def get_tokens(line):
+    """
+    Split a line into tokens, where tokens are separated by spaces or commas.
+    """
+    # Use regex to split by spaces or commas, but keep the delimiters as tokens
+    return re.split(r'(\s+|,)', line)
+    
+def is_swimmer_line(line):
+    """
+    Check if a line represents a swimmer entry.
+    We can do this by checking if there is a number after "Acton" or "Ealing".
+    """
+    tokens = get_tokens(line)
+    return len(tokens) > 1 and (tokens[0] == "Acton" or tokens[0] == "Ealing") and contains_digit(tokens[2])
+
 def parse_swimmer(line):
     """
     Takes a string of this form "Acton 107 LastNames, FirstName MiddleNameInitials 56.30  NT".
@@ -56,59 +71,58 @@ def parse_swimmer(line):
     The name is in the format "LastNames, FirstName"
     """
     # Split by spaces or commas
-    tokens = re.split(r' |,', line.strip())
-    
-    # Skip "Acton"
-    if tokens[0] == "Acton":
+    tokens = get_tokens(line)
+
+    # Skip "Acton" or "Ealing"
+    if tokens[0] == "Acton" or tokens[0] == "Ealing":
         tokens.pop(0)
     else:
         raise ValueError(f"Line does not start with 'Acton'\n{line}")
     
-    # Skip all ' ' tokens and numbers until we hit a name
-    while tokens and (tokens[0] == '' or contains_digit(tokens[0])):
+    # Skip garbage tokens
+    while tokens and not re.search(r'[A-Za-z]', tokens[0]):
         tokens.pop(0)
     
-    # Extract last names until we hit ' ' token (meaning we hit the comma)
-    last_names = []
-    while tokens and tokens[0] != '':
-        last_names.append(tokens.pop(0))
-    
+    # Extract last names up to the comma delimiter.
+    if "," not in tokens:
+        raise ValueError("No comma found between last and first names")
+    comma_index = tokens.index(",")
+    last_names = [token.strip() for token in tokens[:comma_index] if re.search(r'[A-Za-z]', token)]
     if not last_names:
         raise ValueError("No last names found in line")
+    tokens = tokens[comma_index + 1:]
     
     # Extract first name (and possibly middle name or initials) until we hit a time or keyword
     first_name = []
     while tokens and not is_time(tokens[0]) and extract_keyword(tokens[0]) is None:
-        first_name.append(tokens.pop(0))
+        token = tokens.pop(0).strip()
+        if token:
+            first_name.append(token)
     
     if not first_name:
         raise ValueError("No first name found in line")
     
     # Join last names and first name
-    name = f"{' '.join(last_names)},{' '.join(first_name)}"
+    name = f"{' '.join(last_names)}, {' '.join(first_name)}"
 
     # Now we should have a time or keyword left
     if not tokens:
         raise ValueError("No time or keyword found in line")
     
-    # Extract the achieved time
-    if not tokens or (not is_time(tokens[0]) and extract_keyword(tokens[0]) is None):
-        raise ValueError("Expected a time or keyword after seed time")
-    achieved_time = tokens.pop(0)
+    # Remove garbage tokens
+    while tokens and not is_time(tokens[0]) and extract_keyword(tokens[0]) is None:
+        tokens.pop(0)
     
-    # Skip space if it exists
-    if tokens and tokens[0] == '':
+    # Extract the achieved time
+    if not tokens:
+        raise ValueError("Expected a time or keyword after name")
+    achieved_time = tokens.pop(0).strip()
+    
+    # Remove garbage tokens
+    while tokens and not is_time(tokens[0]) and extract_keyword(tokens[0]) is None:
         tokens.pop(0)
 
-    # Extract the seed time if it exists
-    if tokens and tokens[0] != "q":
-        # The check of "q" is becaues there is a q at the end for qualified swimmers
-        if not is_time(tokens[0]) and extract_keyword(tokens[0]) is None:
-            raise ValueError(f"Invalid seed time format: {tokens[0]}")
-        else:
-            seed_time = tokens.pop(0)
-    else:
-        seed_time = None
+    seed_time = tokens.pop(0).strip() if tokens else None
 
     return name, seed_time, achieved_time
 
@@ -165,7 +179,7 @@ def read_pdf(pdf_path, isQualifiers: bool):
             # Collect swimmer data for this event
             swimmers = []
             while idx < len(lines) and not lines[idx].strip().startswith("Event"):
-                if lines[idx].strip().startswith("Acton"):
+                if is_swimmer_line(lines[idx]):
                     name, seed_time, time = parse_swimmer(lines[idx])
                     swimmers.append({
                         "Name": name,

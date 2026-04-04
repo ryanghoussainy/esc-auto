@@ -1,5 +1,5 @@
 import pandas as pd
-from reusables import match_swimmer, parse_name, normalise_time, read_pdf
+from reusables import match_swimmer, parse_name, normalise_time, read_pdf, is_disqualification
 from discrepancies import display_discrepancies, TimeDiscrepancy, SwimmersNotFound
 
 def get_finals_tables(finals_file):
@@ -112,6 +112,9 @@ def check_finals(
                     # If we have NS in the PDF and DNS in the finals, we consider it a match
                     if pdf_qualifier_time == "NS" and finals_qualifier_time == "DNS":
                         continue
+
+                    if is_disqualification(pdf_qualifier_time) and is_disqualification(finals_qualifier_time):
+                        continue
                     
                     # Normalise times for comparison
                     finals_qualifier_time_normalised = normalise_time(finals_qualifier_time)
@@ -125,6 +128,9 @@ def check_finals(
 
                     # If we have NS in the PDF and DNS in the finals, we consider it a match
                     if pdf_finals_time == "NS" and finals_finals_time == "DNS":
+                        continue
+
+                    if is_disqualification(pdf_finals_time) and is_disqualification(finals_finals_time):
                         continue
 
                     # Normalise finals times for comparison

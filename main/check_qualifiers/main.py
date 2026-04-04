@@ -1,6 +1,6 @@
 import pandas as pd
 from leahify_qualifiers import get_leah_tables, TIME_COLUMN_INDEX
-from reusables import match_swimmer, get_event_name, parse_name, normalise_time, read_pdf, rename_final_column
+from reusables import match_swimmer, get_event_name, parse_name, normalise_time, read_pdf, rename_final_column, is_disqualification
 from discrepancies import display_discrepancies, TimeDiscrepancy, SwimmersNotFound
 
 
@@ -24,6 +24,15 @@ def split_extra_rows(leah_table):
     leah_normal_df = leah_normal_df.dropna(subset=["Name"])
 
     return leah_normal_df, leah_extra_df
+
+
+def has_recorded_time(value) -> bool:
+    if pd.isna(value):
+        return False
+    normalised = str(value).strip().upper()
+    if normalised in {"", "DNS"}:
+        return False
+    return True
 
 
 def check_qualifiers(
@@ -55,6 +64,14 @@ def check_qualifiers(
         # List to hold any discrepancies found
         # This is a list of (type of mismatch (int/enum), swimmer name, pdf time, leah time)
         discrepancies = []
+        missing_in_pdf_seen = set()
+
+        def add_missing_in_pdf(swimmer_name: str):
+            key = clean_name(swimmer_name).lower()
+            if key in missing_in_pdf_seen:
+                return
+            missing_in_pdf_seen.add(key)
+            discrepancies.append(SwimmersNotFound([clean_name(swimmer_name)]))
 
         # Define automatic and manual matches
         manual_matches = {}
@@ -76,6 +93,13 @@ def check_qualifiers(
                 name = clean_name(row['Name']) # Remove garbage pdf-read dashes
                 time = row[time_column_name]
 
+                if "Sofia" in name:
+                    pass
+
+                # If no time is recorded in Excel, treat as did-not-swim and skip missing-PDF checks.
+                if not has_recorded_time(time):
+                    continue
+
                 # Match only with the corresponding event table
                 pdf_table = pdf_tables[tableIdx]
 
@@ -90,7 +114,7 @@ def check_qualifiers(
                             continue
                         
                         # If we have DQ with explanation, we consider them equal
-                        if "DQ" in matched_pdf_row['Time'].values[0] and "DQ" in row[time_column_name]:
+                        if is_disqualification(matched_pdf_row['Time'].values[0]) and is_disqualification(row[time_column_name]):
                             pdf_table.drop(matched_pdf_row.index, inplace=True)
                             continue
 
@@ -120,9 +144,9 @@ def check_qualifiers(
 
                     # If the swimmer is not found in the PDF results
                     else:
-                        discrepancies.append(SwimmersNotFound([name]))
+                        add_missing_in_pdf(name)
                 else:
-                    discrepancies.append(SwimmersNotFound([name]))
+                    add_missing_in_pdf(name)
 
             # Reset indexes of the table
             pdf_table.reset_index(drop=True, inplace=True)
@@ -167,7 +191,7 @@ def check_qualifiers(
                         continue
                     
                     # If we have DQ with explanation, we consider them equal
-                    if "DQ" in pdf_time and "DQ" in leah_time:
+                    if is_disqualification(pdf_time) and is_disqualification(leah_time):
                         pdf_table.drop(pdf_row.name, inplace=True)
                         continue
 
