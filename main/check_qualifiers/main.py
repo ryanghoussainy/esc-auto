@@ -66,12 +66,12 @@ def check_qualifiers(
         discrepancies = []
         missing_in_pdf_seen = set()
 
-        def add_missing_in_pdf(swimmer_name: str):
-            key = clean_name(swimmer_name).lower()
+        def add_missing_in_pdf(swimmer_name: str, event_name: str):
+            key = (clean_name(swimmer_name).lower(), event_name)
             if key in missing_in_pdf_seen:
                 return
             missing_in_pdf_seen.add(key)
-            discrepancies.append(SwimmersNotFound([clean_name(swimmer_name)]))
+            discrepancies.append(SwimmersNotFound([clean_name(swimmer_name)], event_name=event_name))
 
         # Define automatic and manual matches
         manual_matches = {}
@@ -144,9 +144,9 @@ def check_qualifiers(
 
                     # If the swimmer is not found in the PDF results
                     else:
-                        add_missing_in_pdf(name)
+                        add_missing_in_pdf(name, event_name)
                 else:
-                    add_missing_in_pdf(name)
+                    add_missing_in_pdf(name, event_name)
 
             # Reset indexes of the table
             pdf_table.reset_index(drop=True, inplace=True)

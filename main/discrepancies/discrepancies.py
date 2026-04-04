@@ -81,7 +81,9 @@ def display_timesheet_discrepancies(discrepancies, progress_callback):
 def display_house_champs_discrepancies(discrepancies, progress_callback):
     time_mismatches = [d for d in discrepancies if isinstance(d, TimeDiscrepancy)]
     swimmers_missing = [d for d in discrepancies if isinstance(d, SwimmersNotFound)]
-    unique_swimmers_missing = list(dict.fromkeys((issue.names, issue.pdf) for issue in swimmers_missing))
+    unique_swimmers_missing = list(
+        dict.fromkeys((issue.names, issue.pdf, issue.event_name, str(issue)) for issue in swimmers_missing)
+    )
 
     progress_callback(f"Mismatches found: {len(discrepancies)}", "red")
     progress_callback("Summary by category:", "yellow")
@@ -97,8 +99,8 @@ def display_house_champs_discrepancies(discrepancies, progress_callback):
     if unique_swimmers_missing:
         progress_callback("")
         progress_callback("Missing swimmers:", "yellow")
-        for names, source in unique_swimmers_missing:
-            progress_callback(f"Swimmers {names} not found in {source}")
+        for _, _, _, message in unique_swimmers_missing:
+            progress_callback(message)
 
 def display_discrepancies(discrepancies, progress_callback):
     if not discrepancies:

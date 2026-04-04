@@ -19,7 +19,7 @@ def test_display_discrepancies_house_champs_summary_and_details():
     messages, callback = collect_messages()
     discrepancies = [
         TimeDiscrepancy("Jane Doe", "50m Free", "31.22", "31.44"),
-        SwimmersNotFound(["Smith, John"]),
+        SwimmersNotFound(["Smith, John"], event_name="100m Breast"),
     ]
 
     display_discrepancies(discrepancies, callback)
@@ -31,7 +31,7 @@ def test_display_discrepancies_house_champs_summary_and_details():
     assert "- Time mismatches: 1" in text_lines
     assert "- Missing swimmers: 1" in text_lines
     assert any("Time mismatch for Jane Doe" in line for line in text_lines)
-    assert any("Swimmers Smith, John not found in PDF" in line for line in text_lines)
+    assert any("Swimmers Smith, John not found in PDF (Event: 100m Breast)" in line for line in text_lines)
 
 
 def test_display_discrepancies_mixed_types_prints_both_sections():
@@ -64,3 +64,19 @@ def test_display_discrepancies_dedupes_missing_swimmer_in_pdf():
 
     assert "- Missing swimmers: 1" in text_lines
     assert len(missing_messages) == 1
+
+
+def test_display_discrepancies_keeps_missing_swimmer_entries_for_different_events():
+    messages, callback = collect_messages()
+    discrepancies = [
+        SwimmersNotFound(["Smith, John"], event_name="100m Breast"),
+        SwimmersNotFound(["Smith, John"], event_name="200m IM"),
+    ]
+
+    display_discrepancies(discrepancies, callback)
+
+    text_lines = [msg for msg, _ in messages]
+
+    assert "- Missing swimmers: 2" in text_lines
+    assert "Swimmers Smith, John not found in PDF (Event: 100m Breast)" in text_lines
+    assert "Swimmers Smith, John not found in PDF (Event: 200m IM)" in text_lines
