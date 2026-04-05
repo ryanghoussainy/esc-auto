@@ -80,3 +80,16 @@ def test_display_discrepancies_keeps_missing_swimmer_entries_for_different_event
     assert "- Missing swimmers: 2" in text_lines
     assert "Swimmers Smith, John not found in PDF (Event: 100m Breast)" in text_lines
     assert "Swimmers Smith, John not found in PDF (Event: 200m IM)" in text_lines
+
+
+def test_display_discrepancies_missing_swimmer_includes_missing_time():
+    messages, callback = collect_messages()
+    discrepancies = [
+        SwimmersNotFound(["Armouch, Sara"], event_name="100m Breast", missing_time="2.24.34dq 7.5"),
+    ]
+
+    display_discrepancies(discrepancies, callback)
+
+    text_lines = [msg for msg, _ in messages]
+
+    assert "Swimmers Armouch, Sara not found in PDF (Event: 100m Breast) (Time: 2.24.34dq 7.5)" in text_lines
