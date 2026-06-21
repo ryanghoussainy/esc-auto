@@ -30,7 +30,11 @@ def amindefy_timesheets(timesheet_folder: str, output_file: str, progress_callba
             return sort_key.strip().lower()
         
         for filename in sorted(excel_files, key=clean_filename):
-            amindefy_timesheet(filename, timesheet_folder, output_wb)
+            try:
+                amindefy_timesheet(filename, timesheet_folder, output_wb)
+            except Exception as e:
+                error_callback(f"❌ ERROR processing '{filename}': {str(e)}\n", "red")
+                return
 
             progress_callback(f"Added timesheet: {filename}\n")
         
