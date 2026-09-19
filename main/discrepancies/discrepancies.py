@@ -48,8 +48,8 @@ def display_timesheet_discrepancies(discrepancies, progress_callback):
     if empty_timesheets:
         progress_callback("")
         progress_callback("Empty timesheets:", "yellow")
-        for issue in sorted(empty_timesheets, key=lambda d: d.sheet_name.lower()):
-            progress_callback(f"- {issue.sheet_name}")
+        for issue in sorted(empty_timesheets, key=lambda d: d.name.lower()):
+            progress_callback(f"- {issue.name}")
 
     if timesheet_only:
         grouped = defaultdict(list)

@@ -1,12 +1,13 @@
 import pandas as pd
 from datetime import datetime
 from openpyxl import load_workbook
+import os
 
 from .read_sign_in import read_sign_in_sheet
 from discrepancies import display_discrepancies
 from reusables.entry import Entry
 from reusables.events import is_event
-from discrepancies import EmptyTimesheet, InvalidName, TimesheetExtraEntry, SignInExtraEntry
+from discrepancies import EmptyTimesheet, InvalidName, TimesheetExtraEntry, SignInExtraEntry, Discrepancy
 
 
 NAME_CELL = (2, 2)
@@ -18,10 +19,15 @@ LEVEL_COL = "Level"
 RATE_INCREASE_COL_IDX = 6
 ADMIN_RATE_INCREASE = 1.05
 
-def read_timesheet(df) -> tuple[str, list[Entry]]:
+def _read_timesheet(timesheet_path) -> tuple[str, set[Entry]]:
     """
     Read a timesheet excel file and return a set of entries
     """
+    # Get dataframe from excel file
+    wb = load_workbook(timesheet_path, read_only=True, data_only=False)
+    ws = wb.active
+    df = pd.DataFrame(ws.values)
+
     # Get the name
     name = str(df.iloc[NAME_CELL]).strip()
     
@@ -60,7 +66,7 @@ def read_timesheet(df) -> tuple[str, list[Entry]]:
     read_rates_table(df, start_row=header_row + 1, levels_col=9, is_events_table=True, level_to_rate=level_to_rate, rate_increase=rate_increase)
 
     # Create list of entries
-    timesheet_data = []
+    entries = set()
     
     for _, row in table_df.iterrows():
         # Get start time and end time
@@ -100,14 +106,15 @@ def read_timesheet(df) -> tuple[str, list[Entry]]:
             rate=rate,
             is_event=is_event(level)
         )
-        timesheet_data.append(entry)
+        entries.add(entry)
 
-    return name, timesheet_data
+    return name, entries
 
 
 def check_timesheets(
-    amindefied_excel_path,
-    sign_in_sheet_path, rates,
+    timesheets_folder_path,
+    sign_in_sheet_path,
+    rates,
     rates_after,
     rate_change_date,
     month,
@@ -118,24 +125,33 @@ def check_timesheets(
         # Check for discrepancies
         discrepancies = []
 
-        # Read sign in sheet
+        # Map from name to set of entries from the sign in sheet
         sign_in_data = read_sign_in_sheet(month, sign_in_sheet_path, rates, rates_after, rate_change_date)
 
-        with pd.ExcelFile(amindefied_excel_path) as xls:
-            for sheet_name in xls.sheet_names:
-                # Read individual timesheet
-                wb = load_workbook(amindefied_excel_path, read_only=True, data_only=False)
-                ws = wb[sheet_name]
-                df = pd.DataFrame(ws.values)
-                if df.empty:
-                    discrepancies.append(EmptyTimesheet(sheet_name=sheet_name))
+        # This will hold a map from name to a set of entries (same structure as sign_in_data)
+        timesheets_data = {}
 
-                check_timesheet(df, sign_in_data, discrepancies, progress_callback)
+        timesheets_filenames = sorted([f for f in os.listdir(timesheets_folder_path) if _is_valid_xlsx(f)], key=_clean_filename)
+        for timesheet_filename in timesheets_filenames:
+            timesheet_path = os.path.join(timesheets_folder_path, timesheet_filename)
+
+            name, entries = _read_timesheet(timesheet_path)
+            if not entries:
+                discrepancies.append(EmptyTimesheet(name=name))
+            timesheets_data[name] = entries
+
+        # Compare timesheets data with sign in data
+        for name, timesheet_entries in timesheets_data.items():
+            if name not in sign_in_data:
+                discrepancies.append(InvalidName(name=name, sign_in_names=list(sign_in_data.keys())))
+                continue
+
+            check_timesheet(name, timesheet_entries, sign_in_data[name], discrepancies, progress_callback)
         
         # Check for remaining entries in sign in data
-        for name, entries in sign_in_data.items():
-            for entry in entries:
-                discrepancies.append(SignInExtraEntry(name=name, entry=entry))
+        for name, sign_in_entries in sign_in_data.items():
+            for sign_in_entry in sign_in_entries:
+                discrepancies.append(SignInExtraEntry(name=name, entry=sign_in_entry))
 
         display_discrepancies(discrepancies, progress_callback)
     
@@ -143,31 +159,25 @@ def check_timesheets(
         error_callback(f"❌ ERROR: {str(e)}", "red")
 
 
-def check_timesheet(df, sign_in_data: dict[str, set[Entry]], discrepancies, progress_callback):
+def check_timesheet(
+    name: str,
+    timesheet_entries: set[Entry],
+    sign_in_entries: set[Entry],
+    discrepancies: list[Discrepancy],
+    progress_callback
+):
     """
-    Check a single timesheet against the sign in data and display any discrepancies found.
+    Check a single timesheet against the sign in data and append any discrepancies found.
     """
-    # Read the timesheet
-    name, timesheet_entries = read_timesheet(df)
+    # For each entry in the timesheet data, match and remove from the sign in data
+    progress_callback(f"Checking timesheet for {name}...\n")
+    for entry in list(timesheet_entries):
+        if entry not in sign_in_entries:
+            discrepancies.append(TimesheetExtraEntry(name=name, entry=entry))
+            continue
 
-    # Check if timesheet name is correct
-    if name not in sign_in_data:
-        sign_in_names = list(sign_in_data.keys())
-        discrepancies.append(InvalidName(name=name, sign_in_names=sign_in_names))
-    else:
-        # Make sets for comparison to not modify the original data
-        timesheet_set = set(timesheet_entries)
-        sign_in_set = sign_in_data[name]
-
-        # For each entry in the timesheet data, match and remove from the sign in data
-        progress_callback(f"Checking timesheet for {name}...\n")
-        for entry in timesheet_entries:
-            if entry not in sign_in_set:
-                discrepancies.append(TimesheetExtraEntry(name=name, entry=entry))
-            else:
-                # Successfully matched entry
-                sign_in_set.remove(entry)
-                timesheet_set.remove(entry)
+        # Successfully matched entry
+        sign_in_entries.remove(entry)
 
 
 def read_rates_table(df, start_row, levels_col, is_events_table, level_to_rate, rate_increase):
@@ -201,4 +211,17 @@ def read_rates_table(df, start_row, levels_col, is_events_table, level_to_rate, 
                 level_to_rate[lvl] = round(level_to_rate[lvl] * ADMIN_RATE_INCREASE, 2)
             elif lvl != "other":
                 level_to_rate[lvl] = round(level_to_rate[lvl] * rate_increase, 2)
-        
+
+def _clean_filename(filename: str):
+    """Remove useless info from timesheet file name attempt to sort by employee name"""
+    to_delete = ["L1", "ENL2", "NQL2", "L2", "and", "&"] # Note: L2 must be after NQL2 and ENL2
+    
+    sort_key = filename
+    for item in to_delete:
+        sort_key = sort_key.replace(item, "")
+
+    return sort_key.strip().lower()
+
+def _is_valid_xlsx(filename: str) -> bool:
+    """Check if a file is a valid xlsx file (not temporary or hidden)"""
+    return filename.endswith(".xlsx") and not filename.startswith("~$")

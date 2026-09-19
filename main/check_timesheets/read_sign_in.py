@@ -8,9 +8,15 @@ NAME_COL = "Name"
 LEVEL_COL = "Level"
 
 
-def read_sign_in_sheet(month: str, file_path: str, rates: dict[str, float], rates_after: dict[str, float] | None, rate_change_date: str | None) -> dict[str, set[Entry]]:
+def read_sign_in_sheet(
+    month: str,
+    file_path: str,
+    rates: dict[str, float],
+    rates_after: dict[str, float] | None,
+    rate_change_date: str | None
+) -> dict[str, set[Entry]]:
     """
-    Read a sign in sheet excel file and return a dictionnary from name to set of entries
+    Read a sign in sheet excel file and return a map from name to set of entries
     """
     sign_df = pd.read_excel(file_path, month, header=0)
 

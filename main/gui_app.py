@@ -1,4 +1,4 @@
-__version__ = "1.2.4" # Major.Minor.Patch
+__version__ = "1.3.1" # Major.Minor.Patch
 
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
@@ -15,7 +15,6 @@ from leahify_qualifiers import leahify_qualifiers
 from generate_rankings import generate_rankings
 from check_qualifiers import check_qualifiers
 from check_finals import check_finals
-from amindefy_timesheets import amindefy_timesheets
 from check_timesheets import check_timesheets
 from constants import MONTHS, RATE_LEVELS
 from colours import *
@@ -51,9 +50,7 @@ class SwimmingResultsApp:
             'finals_excel': None,
             'full_results_pdf': None,
             'timesheets_folder': None,
-            'amindefied_excel': None,
             'sign_in_sheet': None,
-            'amindefy_output_file': None,
             'leahify_output_file': None,
             'rankings_output_file': None,
         }
@@ -233,13 +230,10 @@ class SwimmingResultsApp:
         self.timesheet_checker_notebook = ttk.Notebook(left_frame, style="TNotebook")
         self.timesheet_checker_notebook.pack(expand=True, fill='both', padx=10)
 
-        # Tab 1: Folder Processing
-        self.create_amindefy_tab()
-
-        # Tab 2: Rates
+        # Tab 1: Rates
         self.create_rates_tab()
 
-        # Tab 3: Check Timesheets
+        # Tab 2: Check Timesheets
         self.create_check_timesheets_tab()
 
         # Output panel on right side
@@ -656,39 +650,9 @@ class SwimmingResultsApp:
         )
         process_btn.pack(pady=30)
     
-    def create_amindefy_tab(self):
-        frame = tk.Frame(self.timesheet_checker_notebook, bg=NOTEBOOK_TAB_BACKGROUND)
-        self.timesheet_checker_notebook.add(frame, text="1. Amindefy Timesheets")
-
-        # Instructions
-        instructions = tk.Label(
-            frame,
-            text="Combine all timesheets into a single Excel file.",
-            font=("Segoe UI", 12),
-            bg=NOTEBOOK_TAB_BACKGROUND,
-            wraplength=400
-        )
-        instructions.pack(pady=20)
-        
-        # Folder input area
-        self.create_folder_input(frame, "Timesheets Folder", 'timesheets_folder')
-
-        # Output file selection
-        self.create_output_file_input(frame, "Output Excel File", 'amindefy_output_file', [('Excel files', '*.xlsx')], 'all_timesheets.xlsx')
-        
-        # Process button
-        process_btn = Button(
-            frame,
-            text="Create Amindefied Excel File",
-            command=self.run_amindefy,
-            highlightbackground=NOTEBOOK_TAB_BACKGROUND,
-            focusthickness=0,
-        )
-        process_btn.pack(pady=30)
-    
     def create_rates_tab(self):
         frame = tk.Frame(self.timesheet_checker_notebook, bg=NOTEBOOK_TAB_BACKGROUND)
-        self.timesheet_checker_notebook.add(frame, text="2. Rates")
+        self.timesheet_checker_notebook.add(frame, text="1. Rates")
 
         instructions = tk.Label(
             frame,
@@ -930,7 +894,7 @@ class SwimmingResultsApp:
         month_dropdown.pack(pady=(0, 15))
         
         # File input areas
-        self.create_file_input(frame, "Timesheets Excel File", 'amindefied_excel', [('Excel files', '*.xls *.xlsx')])
+        self.create_folder_input(frame, "Timesheets Folder", 'timesheets_folder')
         self.create_file_input(frame, "Sign In Sheet", 'sign_in_sheet', [('Excel files', '*.xls *.xlsx')])
         
         # Process button
@@ -1197,40 +1161,8 @@ class SwimmingResultsApp:
         
         threading.Thread(target=process, daemon=True).start()
     
-    def run_amindefy(self):
-        if not self.file_paths['timesheets_folder']:
-            messagebox.showerror("Error", "Please select a folder")
-            return
-        
-        def process():
-            try:
-                self.clear_output()
-
-                # Define callback functions
-                def progress_callback(message, color=None):
-                    self.append_output(message, color)
-                
-                def error_callback(message, color=None):
-                    self.append_output(message, color or "red")
-                
-                # Call backend
-                amindefy_timesheets(
-                    self.file_paths['timesheets_folder'],
-                    self.file_paths.get('amindefy_output_file', 'all_timesheets.xlsx'),
-                    progress_callback,
-                    error_callback
-                )
-            
-            except KeyboardInterrupt:
-                self.append_output("Operation cancelled by user.", "red")
-            except Exception as e:
-                self.append_output(f"❌ ERROR: {str(e)}", "red")
-        
-        # Run in separate thread to prevent GUI freezing
-        threading.Thread(target=process, daemon=True).start()
-    
     def run_check_timesheets(self):
-        if not self.file_paths['amindefied_excel'] or not self.file_paths['sign_in_sheet']:
+        if not self.file_paths['timesheets_folder'] or not self.file_paths['sign_in_sheet']:
             messagebox.showerror("Error", "Please select both Excel files")
             return
 
@@ -1250,7 +1182,7 @@ class SwimmingResultsApp:
 
                 # Call backend
                 check_timesheets(
-                    self.file_paths['amindefied_excel'],
+                    self.file_paths['timesheets_folder'],
                     self.file_paths['sign_in_sheet'],
                     rates,
                     rates_after,
