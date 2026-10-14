@@ -1,6 +1,7 @@
 import pandas as pd
-from reusables import match_swimmer, parse_name, normalise_time, read_pdf, is_disqualification
-from discrepancies import display_discrepancies, TimeDiscrepancy, SwimmersNotFound
+from input_validation import require_file, require_writable_output, EXCEL_EXTENSIONS, PDF_EXTENSIONS
+from reusables import match_swimmer, parse_name, normalise_time, read_pdf, is_disqualification, require_columns, check_event_counts
+from discrepancies import display_discrepancies, TimeDiscrepancy, SwimmersNotFound, UnparsedPdfLine
 
 def get_finals_tables(finals_file):
     """
@@ -36,6 +37,11 @@ def get_event_name_from_finals(finals_table):
     The event name is in the first row, first column in format like "Event 1 25m back 2016 & under girls (8 & under)"
     """
     # We get the index 7 column because that header is just the event name in the finals excel
+    if len(finals_table.columns) <= 7:
+        raise ValueError(
+            f"A table in the finals sheet has only {len(finals_table.columns)} columns, "
+            f"so the event name (column 8) could not be found."
+        )
     return str(finals_table.columns[7])
 
 def check_finals(
@@ -43,112 +49,123 @@ def check_finals(
     pdf_file,
     progress_callback,
     confirm_callback,
-    error_callback,
 ):
     """
     Check the finals results against the full results PDF.
     """
-    try:
-        # Read the finals results from the Excel file
-        # We have 45 tables, each with shape (7 rows, 9 columns)
-        finals_tables = get_finals_tables(finals_file)
+    require_file(finals_file, "finals Excel file", EXCEL_EXTENSIONS)
+    require_file(pdf_file, "full results PDF", PDF_EXTENSIONS)
+
+    # Read the finals results from the Excel file
+    # We have 45 tables, each with shape (7 rows, 9 columns)
+    finals_tables = get_finals_tables(finals_file)
+
+    # Read pdf
+    # Lines we can't parse are reported at the end rather than aborting the whole check
+    skipped_lines = []
+    pdf_tables = read_pdf(pdf_file, isQualifiers=False, skipped_lines=skipped_lines)
+
+    if not finals_tables:
+        raise ValueError("No events found in the 'Finals' sheet (looked for rows starting with 'Event').")
+    check_event_counts(len(finals_tables), len(pdf_tables), "The finals Excel file", "the full results PDF")
     
-        # Read pdf
-        pdf_tables = read_pdf(pdf_file, isQualifiers=False)
-        
-        # Compare finals table and pdf data and alert user of any differences
-        
-        # List to hold any discrepancies found
-        # This is a list of (type of mismatch (int/enum), swimmer name, event name, pdf time, finals time)
-        discrepancies = []
-        
-        # Define automatic and manual matches
-        manual_matches = {}
-        automatic_matches = {}
-        
-        for tableIdx in range(len(finals_tables)):
-            # Get event name from finals table
-            event_name = get_event_name_from_finals(finals_tables[tableIdx])
-            
-            # Get the finals table
-            finals_df = pd.DataFrame(finals_tables[tableIdx])
-            
-            # Remove rows where both First name and Surname are NaN
-            finals_df = finals_df.dropna(subset=["First name", "Surname"])
-
-            # Get pdf table
-            pdf_table = pdf_tables[tableIdx]
-            
-            # Swimmers in finals table are in Sammy's format.
-            # So we need to manually match those that don't match automatically
-            for _, pdf_row in pdf_table.iterrows():
-                # Get swimmer name and times from PDF table
-                pdf_name = pdf_row["Name"]
-                pdf_qualifier_time = pdf_row["Qualifiers Time"]
-                pdf_finals_time = pdf_row["Finals Time"]
-
-                # Extract swimmer's first name and surname from PDF name
-                pdf_first_names, pdf_surname = parse_name(pdf_name)
-                pdf_first_name = pdf_first_names.split()[0]
-
-                # Find the swimmer in the finals table
-                swimmer = match_swimmer(
-                    pdf_first_name, # In Leah's format
-                    pdf_surname, # In Leah's format
-                    finals_df, # In Sammy's format
-                    automatic_matches,
-                    manual_matches,
-                    progress_callback=progress_callback,
-                    confirm_callback=confirm_callback,
-                )
-
-                if len(swimmer) > 0:
-                    # Get full name
-                    full_name = f"{swimmer['First name'].iloc[0]} {swimmer['Surname'].iloc[0]}"
-
-                    # Compare qualifier times
-                    finals_qualifier_time = swimmer[f"Qualifier {event_name}"].iloc[0]
-
-                    # If we have NS in the PDF and DNS in the finals, we consider it a match
-                    if pdf_qualifier_time == "NS" and finals_qualifier_time == "DNS":
-                        continue
-
-                    if is_disqualification(pdf_qualifier_time) and is_disqualification(finals_qualifier_time):
-                        continue
-                    
-                    # Normalise times for comparison
-                    finals_qualifier_time_normalised = normalise_time(finals_qualifier_time)
-                    pdf_qualifier_time_normalised = normalise_time(pdf_qualifier_time)
-                    
-                    if pdf_qualifier_time_normalised != finals_qualifier_time_normalised:
-                        discrepancies.append(TimeDiscrepancy(full_name, event_name, pdf_qualifier_time, finals_qualifier_time))
-                    
-                    # Compare finals times
-                    finals_finals_time = swimmer.iloc[0][event_name]
-
-                    # If we have NS in the PDF and DNS in the finals, we consider it a match
-                    if pdf_finals_time == "NS" and finals_finals_time == "DNS":
-                        continue
-
-                    if is_disqualification(pdf_finals_time) and is_disqualification(finals_finals_time):
-                        continue
-
-                    # Normalise finals times for comparison
-                    finals_finals_time_normalised = normalise_time(finals_finals_time)
-                    pdf_finals_time_normalised = normalise_time(pdf_finals_time)
-
-                    if pdf_finals_time_normalised != finals_finals_time_normalised:
-                        discrepancies.append(TimeDiscrepancy(full_name, event_name, pdf_finals_time, finals_finals_time))
-                    
-                    # SUCCESSFUL MATCH
-                else:
-                    # If no swimmer was found, we have a discrepancy
-                    # We don't have the swimmer's name in Sammy's format so we use the pdf name.
-                    discrepancies.append(SwimmersNotFound([pdf_name]))
-
-        progress_callback("✅ FINALS CHECK COMPLETED!", "green")
-
-        display_discrepancies(discrepancies, progress_callback)
+    # Compare finals table and pdf data and alert user of any differences
     
-    except Exception as e:
-        error_callback(f"❌ ERROR: {str(e)}", "red")
+    # List to hold any discrepancies found
+    # This is a list of (type of mismatch (int/enum), swimmer name, event name, pdf time, finals time)
+    discrepancies = []
+    
+    # Define automatic and manual matches
+    manual_matches = {}
+    automatic_matches = {}
+    
+    for tableIdx in range(len(finals_tables)):
+        # Get event name from finals table
+        event_name = get_event_name_from_finals(finals_tables[tableIdx])
+        
+        # Get the finals table
+        finals_df = pd.DataFrame(finals_tables[tableIdx])
+        
+        require_columns(
+            finals_tables[tableIdx],
+            ["First name", "Surname", f"Qualifier {event_name}", event_name],
+            f"the finals sheet (event '{event_name}')",
+        )
+
+        # Remove rows where both First name and Surname are NaN
+        finals_df = finals_df.dropna(subset=["First name", "Surname"])
+
+        # Get pdf table
+        pdf_table = pdf_tables[tableIdx]
+        
+        # Swimmers in finals table are in Sammy's format.
+        # So we need to manually match those that don't match automatically
+        for _, pdf_row in pdf_table.iterrows():
+            # Get swimmer name and times from PDF table
+            pdf_name = pdf_row["Name"]
+            pdf_qualifier_time = pdf_row["Qualifiers Time"]
+            pdf_finals_time = pdf_row["Finals Time"]
+
+            # Extract swimmer's first name and surname from PDF name
+            pdf_first_names, pdf_surname = parse_name(pdf_name)
+            pdf_first_name = pdf_first_names.split()[0]
+
+            # Find the swimmer in the finals table
+            swimmer = match_swimmer(
+                pdf_first_name, # In Leah's format
+                pdf_surname, # In Leah's format
+                finals_df, # In Sammy's format
+                automatic_matches,
+                manual_matches,
+                progress_callback=progress_callback,
+                confirm_callback=confirm_callback,
+            )
+
+            if len(swimmer) > 0:
+                # Get full name
+                full_name = f"{swimmer['First name'].iloc[0]} {swimmer['Surname'].iloc[0]}"
+
+                # Compare qualifier times
+                finals_qualifier_time = swimmer[f"Qualifier {event_name}"].iloc[0]
+
+                # If we have NS in the PDF and DNS in the finals, we consider it a match
+                if pdf_qualifier_time == "NS" and finals_qualifier_time == "DNS":
+                    continue
+
+                if is_disqualification(pdf_qualifier_time) and is_disqualification(finals_qualifier_time):
+                    continue
+                
+                # Normalise times for comparison
+                finals_qualifier_time_normalised = normalise_time(finals_qualifier_time)
+                pdf_qualifier_time_normalised = normalise_time(pdf_qualifier_time)
+                
+                if pdf_qualifier_time_normalised != finals_qualifier_time_normalised:
+                    discrepancies.append(TimeDiscrepancy(full_name, event_name, pdf_qualifier_time, finals_qualifier_time))
+                
+                # Compare finals times
+                finals_finals_time = swimmer.iloc[0][event_name]
+
+                # If we have NS in the PDF and DNS in the finals, we consider it a match
+                if pdf_finals_time == "NS" and finals_finals_time == "DNS":
+                    continue
+
+                if is_disqualification(pdf_finals_time) and is_disqualification(finals_finals_time):
+                    continue
+
+                # Normalise finals times for comparison
+                finals_finals_time_normalised = normalise_time(finals_finals_time)
+                pdf_finals_time_normalised = normalise_time(pdf_finals_time)
+
+                if pdf_finals_time_normalised != finals_finals_time_normalised:
+                    discrepancies.append(TimeDiscrepancy(full_name, event_name, pdf_finals_time, finals_finals_time))
+                
+                # SUCCESSFUL MATCH
+            else:
+                # If no swimmer was found, we have a discrepancy
+                # We don't have the swimmer's name in Sammy's format so we use the pdf name.
+                discrepancies.append(SwimmersNotFound([pdf_name]))
+
+    discrepancies.extend(UnparsedPdfLine(*skipped) for skipped in skipped_lines)
+    display_discrepancies(discrepancies, progress_callback)
+
+    progress_callback("✅ FINALS CHECK COMPLETED!", "green")

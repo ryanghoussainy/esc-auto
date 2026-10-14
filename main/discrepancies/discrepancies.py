@@ -7,6 +7,9 @@ from .discrepancy_types.sign_in_extra_entry import SignInExtraEntry
 from .discrepancy_types.swimmer_not_found import SwimmersNotFound
 from .discrepancy_types.time_discrepancy import TimeDiscrepancy
 from .discrepancy_types.timesheet_extra_entry import TimesheetExtraEntry
+from .discrepancy_types.timesheet_month_mismatch import TimesheetMonthMismatch
+from .discrepancy_types.unreadable_timesheet import UnreadableTimesheet
+from .discrepancy_types.unparsed_pdf_line import UnparsedPdfLine
 
 
 def format_entry(entry) -> str:
@@ -25,6 +28,8 @@ def rank_names_by_similarity(target_name: str, candidate_names: list[str]) -> li
 
 
 def display_timesheet_discrepancies(discrepancies, progress_callback):
+    unreadable = [d for d in discrepancies if isinstance(d, UnreadableTimesheet)]
+    wrong_month = [d for d in discrepancies if isinstance(d, TimesheetMonthMismatch)]
     invalid_names = [d for d in discrepancies if isinstance(d, InvalidName)]
     empty_timesheets = [d for d in discrepancies if isinstance(d, EmptyTimesheet)]
     timesheet_only = [d for d in discrepancies if isinstance(d, TimesheetExtraEntry)]
@@ -32,10 +37,27 @@ def display_timesheet_discrepancies(discrepancies, progress_callback):
 
     progress_callback(f"Mismatches found: {len(discrepancies)}", "red")
     progress_callback("Summary by category:", "yellow")
+    if unreadable:
+        progress_callback(f"- Unreadable timesheets: {len(unreadable)}")
+    if wrong_month:
+        progress_callback(f"- Timesheets for the wrong month: {len(wrong_month)}")
     progress_callback(f"- Name issues: {len(invalid_names)}")
     progress_callback(f"- Empty timesheets: {len(empty_timesheets)}")
     progress_callback(f"- Extra in timesheet: {len(timesheet_only)}")
     progress_callback(f"- Missing from timesheet: {len(signin_only)}")
+
+    if unreadable:
+        progress_callback("")
+        progress_callback("Unreadable timesheets (fix or remove these, then run again):", "yellow")
+        for issue in sorted(unreadable, key=lambda d: d.filename.lower()):
+            progress_callback(str(issue), "red")
+        progress_callback("Note: anyone with an unreadable timesheet will also appear under 'Missing from timesheet' below.")
+
+    if wrong_month:
+        progress_callback("")
+        progress_callback("Timesheets marked with a different month:", "yellow")
+        for issue in sorted(wrong_month, key=lambda d: d.name.lower()):
+            progress_callback(str(issue))
 
     if invalid_names:
         progress_callback("")
@@ -81,6 +103,7 @@ def display_timesheet_discrepancies(discrepancies, progress_callback):
 def display_house_champs_discrepancies(discrepancies, progress_callback):
     time_mismatches = [d for d in discrepancies if isinstance(d, TimeDiscrepancy)]
     swimmers_missing = [d for d in discrepancies if isinstance(d, SwimmersNotFound)]
+    unparsed_lines = [d for d in discrepancies if isinstance(d, UnparsedPdfLine)]
     unique_swimmers_missing = list(
         dict.fromkeys((issue.names, issue.pdf, issue.event_name, str(issue)) for issue in swimmers_missing)
     )
@@ -89,6 +112,14 @@ def display_house_champs_discrepancies(discrepancies, progress_callback):
     progress_callback("Summary by category:", "yellow")
     progress_callback(f"- Time mismatches: {len(time_mismatches)}")
     progress_callback(f"- Missing swimmers: {len(unique_swimmers_missing)}")
+    if unparsed_lines:
+        progress_callback(f"- Unreadable PDF lines: {len(unparsed_lines)}")
+
+    if unparsed_lines:
+        progress_callback("")
+        progress_callback("Unreadable PDF lines (these swimmers were NOT checked):", "yellow")
+        for issue in unparsed_lines:
+            progress_callback(str(issue), "red")
 
     if time_mismatches:
         progress_callback("")
@@ -108,8 +139,8 @@ def display_discrepancies(discrepancies, progress_callback):
         return
 
     # Route output formatting based on discrepancy class so both apps print useful details.
-    timesheet_types = (InvalidName, EmptyTimesheet, TimesheetExtraEntry, SignInExtraEntry)
-    house_champs_types = (TimeDiscrepancy, SwimmersNotFound)
+    timesheet_types = (InvalidName, EmptyTimesheet, TimesheetExtraEntry, SignInExtraEntry, UnreadableTimesheet, TimesheetMonthMismatch)
+    house_champs_types = (TimeDiscrepancy, SwimmersNotFound, UnparsedPdfLine)
 
     has_timesheet = any(isinstance(d, timesheet_types) for d in discrepancies)
     has_house_champs = any(isinstance(d, house_champs_types) for d in discrepancies)

@@ -18,16 +18,12 @@ from check_finals import check_finals
 from check_timesheets import check_timesheets
 from constants import MONTHS, RATE_LEVELS
 from colours import *
+from app_paths import get_app_data_dir
+from error_reporting import report_error
 
 # Get different path depending on Windows vs Mac
 def get_rates_file_path():
-    system = platform.system()
-    if system == "Windows":
-        return os.path.join(os.path.expanduser("~"), "AppData", "Local", "ESCAuto", "rates.json")
-    elif system == "Darwin":
-        return os.path.join(os.path.expanduser("~"), "Library", "Application Support", "ESCAuto", "rates.json")
-    else:
-        raise NotImplementedError(f"Unsupported OS: {system}")
+    return os.path.join(get_app_data_dir(), "rates.json")
 
 RATES_FILE = get_rates_file_path()
 
@@ -771,6 +767,11 @@ class SwimmingResultsApp:
         }
         Returns (rates_dict, rates_after_dict_or_None, rate_change_date_or_None)
         """
+        self.rates_problem = None
+        if not os.path.exists(RATES_FILE):
+            self.rates_problem = "No rates have been saved yet."
+            return {level: 0.0 for level in RATE_LEVELS}, None, None
+
         try:
             with open(RATES_FILE, "r") as f:
                 data = json.load(f)
@@ -782,7 +783,8 @@ class SwimmingResultsApp:
             rate_change_date = data.get("rate_change_date", None)
 
             return rates, rates_after, rate_change_date
-        except Exception:
+        except Exception as e:
+            self.rates_problem = f"The saved rates file could not be read ({e})."
             return {level: 0.0 for level in RATE_LEVELS}, None, None
 
     def save_rates(self):
@@ -819,31 +821,42 @@ class SwimmingResultsApp:
         """Validate both tables and then persist nested JSON (rates + optional rates_after + date)."""
         new_rates = {}
         new_rates_after = None
+        problems = []
+
+        def read_rate(level, var, label):
+            try:
+                value = float(var.get())
+            except ValueError:
+                problems.append(f"{label} - {level}: '{var.get()}' is not a number")
+                return None
+            if value < 0:
+                problems.append(f"{label} - {level}: rate cannot be negative ({value})")
+                return None
+            return value
 
         # Validate left table (current rates)
         for level, var in self.rate_vars.items():
-            try:
-                value = float(var.get())
+            value = read_rate(level, var, "Current rates")
+            if value is not None:
                 new_rates[level] = value
-            except ValueError:
-                messagebox.showerror("Error", f"Invalid rate for {level}: {var.get()}")
-                return
 
         # Validate right table only if visible (rate change checked)
         if getattr(self, 'rate_change_var', None) and self.rate_change_var.get():
-
-            if not self.rate_change_date_var.get():
-                messagebox.showerror("Error", "Please enter a valid rate change date (DD/MM/YYYY).")
-                return
+            try:
+                datetime.strptime(self.rate_change_date_var.get().strip(), "%d/%m/%Y")
+            except ValueError:
+                problems.append(f"Rate change date: '{self.rate_change_date_var.get()}' is not a valid date. Use DD/MM/YYYY, e.g. 01/01/2027")
 
             new_rates_after = {}
             for level, var in self.rate_vars_after.items():
-                try:
-                    value = float(var.get())
+                value = read_rate(level, var, "Rates after change")
+                if value is not None:
                     new_rates_after[level] = value
-                except ValueError:
-                    messagebox.showerror("Error", f"Invalid rate for {level} (after change): {var.get()}")
-                    return
+
+        # Report everything that's wrong in one go, rather than one field per attempt
+        if problems:
+            messagebox.showerror("Rates not saved", "Please fix the following:\n\n" + "\n".join(f"\u2022 {p}" for p in problems))
+            return
 
         # assign to instance
         self.rates = new_rates
@@ -1021,80 +1034,60 @@ class SwimmingResultsApp:
         path_var = getattr(self, f'{key}_var')
         path_var.set(f"Selected: {os.path.basename(path)}")
         
+    def run_in_background(self, task, success_message=None):
+        """
+        Run task(progress_callback, confirm_callback) on a worker thread.
+        This is the single place where errors from any backend are caught, logged and shown.
+        """
+        def process():
+            try:
+                self.clear_output()
+
+                def progress_callback(message, color=None):
+                    self.append_output(message, color)
+
+                def confirm_callback(data):
+                    return self.show_confirmation_dialog(data)
+
+                task(progress_callback, confirm_callback)
+
+                if success_message:
+                    self.append_output(success_message, "green")
+            except KeyboardInterrupt:
+                self.append_output("Operation cancelled by user", "yellow")
+            except Exception as e:
+                report_error(e, lambda message, color=None: self.append_output(message, color or "red"))
+
+        threading.Thread(target=process, daemon=True).start()
+
     def run_leahify(self):
         if not self.file_paths['sammy_qualifiers'] or not self.file_paths['leah_template']:
             messagebox.showerror("Error", "Please select both required files")
             return
-        
+
         # Get output path or use default (use the Leahify-specific key)
         output_path = self.file_paths.get('leahify_output_file') or 'output.xlsx'
-        
-        def process():
-            try:
-                self.clear_output()
-                
-                # Define callback functions
-                def progress_callback(message, color=None):
-                    self.append_output(message, color)
-                
-                def confirm_callback(data):
-                    return self.show_confirmation_dialog(data)
-                
-                def error_callback(message, color=None):
-                    self.append_output(message, color or "red")
-                
-                # Call the backend function with callbacks
-                leahify_qualifiers(
-                    self.file_paths['sammy_qualifiers'],
-                    self.file_paths['leah_template'],
-                    progress_callback=progress_callback,
-                    confirm_callback=confirm_callback,
-                    error_callback=error_callback,
-                    output_path=output_path,
-                )
-                
-            except KeyboardInterrupt:
-                self.append_output("Operation cancelled by user", "red")
-            except Exception as e:
-                self.append_output(f"❌ ERROR: {str(e)}", "red")
-        
-        # Run in separate thread
-        threading.Thread(target=process, daemon=True).start()
-    
+
+        self.run_in_background(lambda progress_callback, confirm_callback: leahify_qualifiers(
+            self.file_paths['sammy_qualifiers'],
+            self.file_paths['leah_template'],
+            progress_callback=progress_callback,
+            confirm_callback=confirm_callback,
+            output_path=output_path,
+        ))
+
     def run_check_qualifiers(self):
         output_path = self.file_paths.get('output_excel') or 'output.xlsx'
         if not self.file_paths['heat_results_pdf']:
             messagebox.showerror("Error", "Please select the heat results PDF file")
             return
-        
-        def process():
-            try:
-                self.clear_output()
-                
-                def progress_callback(message, color=None):
-                    self.append_output(message, color)
 
-                def confirm_callback(data):
-                    return self.show_confirmation_dialog(data)
-
-                def error_callback(message, color=None):
-                    self.append_output(message, color or "red")
-                
-                # You'll need to update check_qualifiers to accept callbacks too
-                check_qualifiers(
-                    output_path, 
-                    self.file_paths['heat_results_pdf'],
-                    progress_callback=progress_callback,
-                    confirm_callback=confirm_callback,
-                    error_callback=error_callback
-                )
-                
-            except KeyboardInterrupt:
-                self.append_output("Operation cancelled by user", "yellow")
-            except Exception as e:
-                self.append_output(f"❌ ERROR: {str(e)}", "red")
-        
-        threading.Thread(target=process, daemon=True).start()
+        self.run_in_background(lambda progress_callback, confirm_callback: check_qualifiers(
+            output_path,
+            self.file_paths['heat_results_pdf'],
+            progress_callback=progress_callback,
+            confirm_callback=confirm_callback,
+        ))
 
     def run_generate_rankings(self):
         if not self.file_paths['rankings_input_excel']:
@@ -1103,100 +1096,50 @@ class SwimmingResultsApp:
 
         output_path = self.file_paths.get('rankings_output_file') or 'qualifiers_rankings.xlsx'
 
-        def process():
-            try:
-                self.clear_output()
+        self.run_in_background(lambda progress_callback, confirm_callback: generate_rankings(
+            self.file_paths['rankings_input_excel'],
+            output_path,
+            progress_callback=progress_callback,
+        ))
 
-                def progress_callback(message, color=None):
-                    self.append_output(message, color)
-
-                def error_callback(message, color=None):
-                    self.append_output(message, color or "red")
-
-                generate_rankings(
-                    self.file_paths['rankings_input_excel'],
-                    output_path,
-                    progress_callback=progress_callback,
-                    error_callback=error_callback,
-                )
-
-            except KeyboardInterrupt:
-                self.append_output("Operation cancelled by user", "yellow")
-            except Exception as e:
-                self.append_output(f"❌ ERROR: {str(e)}", "red")
-
-        threading.Thread(target=process, daemon=True).start()
-    
     def run_check_finals(self):
         if not self.file_paths['finals_excel'] or not self.file_paths['full_results_pdf']:
             messagebox.showerror("Error", "Please select both required files")
             return
-        
-        def process():
-            try:
-                self.clear_output()
-                
-                def progress_callback(message, color=None):
-                    self.append_output(message, color)
-                
-                def confirm_callback(data):
-                    return self.show_confirmation_dialog(data)
-                
-                def error_callback(message, color=None):
-                    self.append_output(message, color or "red")
-                
-                # You'll need to update check_finals to accept callbacks too
-                check_finals(
-                    self.file_paths['finals_excel'],
-                    self.file_paths['full_results_pdf'],
-                    progress_callback=progress_callback,
-                    confirm_callback=confirm_callback,
-                    error_callback=error_callback
-                )
-                
-            except KeyboardInterrupt:
-                self.append_output("Operation cancelled by user", "yellow")
-            except Exception as e:
-                self.append_output(f"❌ ERROR: {str(e)}", "red")
-        
-        threading.Thread(target=process, daemon=True).start()
-    
+
+        self.run_in_background(lambda progress_callback, confirm_callback: check_finals(
+            self.file_paths['finals_excel'],
+            self.file_paths['full_results_pdf'],
+            progress_callback=progress_callback,
+            confirm_callback=confirm_callback,
+        ))
+
     def run_check_timesheets(self):
         if not self.file_paths['timesheets_folder'] or not self.file_paths['sign_in_sheet']:
             messagebox.showerror("Error", "Please select both Excel files")
             return
 
-        def process():
-            try:
-                self.clear_output()
-                
-                # Define callback functions
-                def progress_callback(message, color=None):
-                    self.append_output(message, color)
+        # Load rates up front (on the main thread) so we never check against the all-zero fallback silently
+        rates, rates_after, rate_change_date = self.load_rates()
+        if self.rates_problem:
+            messagebox.showerror(
+                "Rates not available",
+                f"{self.rates_problem}\n\nOpen the Rates tab, enter the rates and save them before checking timesheets."
+            )
+            return
 
-                def error_callback(message, color=None):
-                    self.append_output(message, color or "red")
-
-                # Load nested rates triple and pass all three to check_timesheets
-                rates, rates_after, rate_change_date = self.load_rates()
-
-                # Call backend
-                check_timesheets(
-                    self.file_paths['timesheets_folder'],
-                    self.file_paths['sign_in_sheet'],
-                    rates,
-                    rates_after,
-                    rate_change_date,
-                    self.month,
-                    progress_callback,
-                    error_callback
-                )
-
-                self._write_to_output(f"\n✅ TIMESHEET CHECK COMPLETED!\n")
-            except Exception as e:
-                self._write_to_output(f"\n❌ ERROR: {str(e)}\n")
-
-        threading.Thread(target=process, daemon=True).start()
+        self.run_in_background(
+            lambda progress_callback, confirm_callback: check_timesheets(
+                self.file_paths['timesheets_folder'],
+                self.file_paths['sign_in_sheet'],
+                rates,
+                rates_after,
+                rate_change_date,
+                self.month,
+                progress_callback,
+            ),
+            success_message="\n✅ TIMESHEET CHECK COMPLETED!",
+        )
 
 def main():
     root = tk.Tk()

@@ -7,6 +7,7 @@ import re
 from typing import Any
 
 import pandas as pd
+from input_validation import require_file, require_writable_output, EXCEL_EXTENSIONS, PDF_EXTENSIONS
 from openpyxl import Workbook
 from openpyxl.styles import Border, PatternFill, Side
 from openpyxl.utils.dataframe import dataframe_to_rows
@@ -376,22 +377,20 @@ def generate_rankings(
     input_path: str,
     output_path: str,
     progress_callback,
-    error_callback,
 ) -> None:
-    try:
-        output_path = output_path or "qualifiers_rankings.xlsx"
+    output_path = output_path or "qualifiers_rankings.xlsx"
+    require_file(input_path, "Leahify output Excel file", EXCEL_EXTENSIONS)
+    require_writable_output(output_path, "rankings output file")
 
-        progress_callback("Loading Leahify qualifiers output...")
-        leah_tables, event_names, _ = get_leah_tables(input_path, None)
+    progress_callback("Loading Leahify qualifiers output...")
+    leah_tables, event_names, _ = get_leah_tables(input_path, None)
 
-        rankings = _build_event_rankings(leah_tables, event_names, progress_callback)
+    rankings = _build_event_rankings(leah_tables, event_names, progress_callback)
 
-        progress_callback("Generating rankings workbook...")
-        _save_rankings_to_excel(rankings, output_path)
+    progress_callback("Generating rankings workbook...")
+    _save_rankings_to_excel(rankings, output_path)
 
-        progress_callback(
-            f"SUCCESS: Rankings generated. Output saved as '{output_path}'",
-            "green",
-        )
-    except Exception as exc:
-        error_callback(f"ERROR: {str(exc)}", "red")
+    progress_callback(
+        f"SUCCESS: Rankings generated. Output saved as '{output_path}'",
+        "green",
+    )

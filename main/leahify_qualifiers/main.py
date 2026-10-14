@@ -5,6 +5,8 @@ First, read leah's version, then for each swimmer in that sheet, find the corres
 time in Sammy's version and add it to the dictionary.
 '''
 
+import os
+from input_validation import require_file, require_writable_output, EXCEL_EXTENSIONS, PDF_EXTENSIONS
 from .extract_tables import extract_tables, concat_tables
 from reusables import match_swimmer, parse_name, get_event_name, is_final, rename_final_column
 import pandas as pd
@@ -42,7 +44,10 @@ def get_leah_tables(file: str, sheet_name: str) -> tuple[list[pd.DataFrame], lis
     - A list of full event names
     - A list of swimmer info (age from, age to, gender)
     '''
-    return extract_tables(file, sheet_name, [(LEAH_TABLE_ID, 0)], get_events=True)
+    tables, events, swimmer_info = extract_tables(file, sheet_name, [(LEAH_TABLE_ID, 0)], get_events=True)
+    if not tables:
+        raise ValueError(f"No event tables were found in '{os.path.basename(file)}'. Is this the right Excel file?")
+    return tables, events, swimmer_info
 
 def load_qualifiers(sfile: str) -> tuple[pd.DataFrame, dict]:
     '''
@@ -328,7 +333,6 @@ def leahify_qualifiers(
     lfile: str,
     progress_callback,
     confirm_callback,
-    error_callback,
     output_path: str = "output.xlsx",
 ) -> None:
     '''
@@ -340,65 +344,63 @@ def leahify_qualifiers(
         output_path: Output file path
         progress_callback: Called with progress messages (str)
         confirm_callback: Called for user confirmations, expects (message: str, data: dict) -> str
-        error_callback: Called with error messages (str)
     '''
-    try:
-        output_path = output_path or "output.xlsx"
+    output_path = output_path or "output.xlsx"
+    require_file(sfile, "Sammy's qualifiers Excel file", EXCEL_EXTENSIONS)
+    require_file(lfile, "Leah's template Excel file", EXCEL_EXTENSIONS)
+    require_writable_output(output_path, "output file")
 
-        progress_callback("Loading qualifier times from Sammy's file...")
-        
-        # Load qualifier times (Sammy's version)
-        qualifiers_table, swimmer_info = load_qualifiers(sfile)
-        
-        progress_callback("Extracting tables from Leah's template...")
+    progress_callback("Loading qualifier times from Sammy's file...")
+    
+    # Load qualifier times (Sammy's version)
+    qualifiers_table, swimmer_info = load_qualifiers(sfile)
+    
+    progress_callback("Extracting tables from Leah's template...")
 
-        # Extract tables from Leah's version
-        leah_tables, full_events, _ = get_leah_tables(lfile, None)
-        
-        # Add Time column if it doesn't exist
-        add_time_column(leah_tables)
+    # Extract tables from Leah's version
+    leah_tables, full_events, _ = get_leah_tables(lfile, None)
+    
+    # Add Time column if it doesn't exist
+    add_time_column(leah_tables)
 
-        # Get time column name in Leah's table
-        time_column_name = leah_tables[0].columns[TIME_COLUMN_INDEX]
-        
-        # Change the "Finals" column name to the time column name in Leah's tables
-        rename_final_column(leah_tables, time_column_name)
-        
-        # Get event names from Leah's tables
-        events = [get_event_name(event) for event in full_events]
-        
-        progress_callback("Matching swimmers between files...", "yellow")
+    # Get time column name in Leah's table
+    time_column_name = leah_tables[0].columns[TIME_COLUMN_INDEX]
+    
+    # Change the "Finals" column name to the time column name in Leah's tables
+    rename_final_column(leah_tables, time_column_name)
+    
+    # Get event names from Leah's tables
+    events = [get_event_name(event) for event in full_events]
+    
+    progress_callback("Matching swimmers between files...", "yellow")
 
-        # For each swimmer in Leah's version, find the corresponding time in Sammy's version
-        matched_events = match_swimmers(
-            qualifiers_table, 
-            leah_tables, 
-            events, 
-            time_column_name, 
-            confirm_callback=confirm_callback,
-            progress_callback=progress_callback
-        )
+    # For each swimmer in Leah's version, find the corresponding time in Sammy's version
+    matched_events = match_swimmers(
+        qualifiers_table, 
+        leah_tables, 
+        events, 
+        time_column_name, 
+        confirm_callback=confirm_callback,
+        progress_callback=progress_callback
+    )
 
-        progress_callback("Processing extra swimmers...")
+    progress_callback("Processing extra swimmers...")
 
-        # Get extra swimmers per event
-        extras_per_event = get_extras_per_event(qualifiers_table, events, swimmer_info, matched_events)
-        
-        # Insert extras into each Leah table before combining
-        leah_tables_with_extras = add_extras_to_leah_tables(leah_tables, extras_per_event)
+    # Get extra swimmers per event
+    extras_per_event = get_extras_per_event(qualifiers_table, events, swimmer_info, matched_events)
+    
+    # Insert extras into each Leah table before combining
+    leah_tables_with_extras = add_extras_to_leah_tables(leah_tables, extras_per_event)
 
-        progress_callback("Generating output file...")
+    progress_callback("Generating output file...")
 
-        # Combine all tables into a single output table
-        output_table = combine_tables(leah_tables_with_extras, time_column_name)
-        
-        # Change back the time column name to "Finals" for finals only using the output table
-        restore_final_column(output_table)
-        
-        # Save the output table to an Excel file
-        save_output_table_to_excel(output_table, output_path, time_column_name)
+    # Combine all tables into a single output table
+    output_table = combine_tables(leah_tables_with_extras, time_column_name)
+    
+    # Change back the time column name to "Finals" for finals only using the output table
+    restore_final_column(output_table)
+    
+    # Save the output table to an Excel file
+    save_output_table_to_excel(output_table, output_path, time_column_name)
 
-        progress_callback(f"✅ FILES PROCESSED SUCCESSFULLY! Output saved as '{output_path}'", "green")
-
-    except Exception as e:
-        error_callback(f"❌ ERROR: {str(e)}", "red")
+    progress_callback(f"✅ FILES PROCESSED SUCCESSFULLY! Output saved as '{output_path}'", "green")

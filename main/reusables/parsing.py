@@ -63,6 +63,11 @@ def is_swimmer_line(line):
     tokens = get_tokens(line)
     return len(tokens) > 1 and (tokens[0] == "Acton" or tokens[0] == "Ealing") and contains_digit(tokens[2])
 
+def _bad_line(message: str, line: str) -> ValueError:
+    """Build a ValueError that always shows the PDF line that could not be parsed."""
+    return ValueError(f"{message}. Line: '{line.strip()}'")
+
+
 def parse_swimmer(line):
     """
     Takes a string of this form "Acton 107 LastNames, FirstName MiddleNameInitials 56.30  NT".
@@ -77,7 +82,7 @@ def parse_swimmer(line):
     if tokens[0] == "Acton" or tokens[0] == "Ealing":
         tokens.pop(0)
     else:
-        raise ValueError(f"Line does not start with 'Acton'\n{line}")
+        raise _bad_line("Line does not start with 'Acton' or 'Ealing'", line)
     
     # Skip garbage tokens
     while tokens and not re.search(r'[A-Za-z]', tokens[0]):
@@ -85,11 +90,11 @@ def parse_swimmer(line):
     
     # Extract last names up to the comma delimiter.
     if "," not in tokens:
-        raise ValueError("No comma found between last and first names")
+        raise _bad_line("No comma found between last and first names", line)
     comma_index = tokens.index(",")
     last_names = [token.strip() for token in tokens[:comma_index] if re.search(r'[A-Za-z]', token)]
     if not last_names:
-        raise ValueError("No last names found in line")
+        raise _bad_line("No last names found", line)
     tokens = tokens[comma_index + 1:]
     
     # Extract first name (and possibly middle name or initials) until we hit a time or keyword
@@ -100,14 +105,14 @@ def parse_swimmer(line):
             first_name.append(token)
     
     if not first_name:
-        raise ValueError("No first name found in line")
+        raise _bad_line("No first name found", line)
     
     # Join last names and first name
     name = f"{' '.join(last_names)}, {' '.join(first_name)}"
 
     # Now we should have a time or keyword left
     if not tokens:
-        raise ValueError("No time or keyword found in line")
+        raise _bad_line("No time or keyword (NT/NS/DQ) found after the name", line)
     
     # Remove garbage tokens
     while tokens and not is_time(tokens[0]) and extract_keyword(tokens[0]) is None:
@@ -115,7 +120,7 @@ def parse_swimmer(line):
     
     # Extract the achieved time
     if not tokens:
-        raise ValueError("Expected a time or keyword after name")
+        raise _bad_line("Expected a time or keyword (NT/NS/DQ) after the name", line)
     achieved_time = tokens.pop(0).strip()
     
     # Remove garbage tokens
@@ -141,12 +146,15 @@ def extract_keyword(x):
             return kw
     return None
 
-def read_pdf(pdf_path, isQualifiers: bool):
+def read_pdf(pdf_path, isQualifiers: bool, skipped_lines: list | None = None):
     """
     Read a PDF file (either heat results of full results) and return the list of pdf tables.
     - For heat results (qualifiers), this will return all of the tables.
     - For finals, this will return only the finals tables (since there are also prelim tables which are not necessary).
       The finals tables contain both the prelim time and the finals time.
+
+    If a swimmer line can't be parsed, an error is raised - unless `skipped_lines` is given, in which case
+    the line is skipped and (event, line, reason) is appended to that list so the caller can report it.
     """
     # Define column name for times in resulting DataFrame
     if isQualifiers:
@@ -170,6 +178,7 @@ def read_pdf(pdf_path, isQualifiers: bool):
     idx = 0
     while idx < len(lines):
         if lines[idx].strip().startswith("Event"):
+            event_label = lines[idx].strip()
             idx += 2
            
             # Skip event details
@@ -180,7 +189,14 @@ def read_pdf(pdf_path, isQualifiers: bool):
             swimmers = []
             while idx < len(lines) and not lines[idx].strip().startswith("Event"):
                 if is_swimmer_line(lines[idx]):
-                    name, seed_time, time = parse_swimmer(lines[idx])
+                    try:
+                        name, seed_time, time = parse_swimmer(lines[idx])
+                    except ValueError as e:
+                        if skipped_lines is None:
+                            raise ValueError(f"Could not read the PDF under '{event_label}': {e}") from e
+                        skipped_lines.append((event_label, lines[idx], str(e).split(". Line:")[0]))
+                        idx += 1
+                        continue
                     swimmers.append({
                         "Name": name,
                         prev_time: seed_time, # Here we take the seed time as the qualifier time

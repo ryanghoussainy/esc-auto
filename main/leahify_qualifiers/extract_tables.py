@@ -68,7 +68,7 @@ def extract_tables(
                 elif "girls" in str(cell).lower():
                     current_gender = "girls"
                 else:
-                    raise ValueError(f"Could not extract gender \"boys\" or \"girls\": {cell}")
+                    raise ValueError(f"Could not extract gender \"boys\" or \"girls\" from row {idx} of the sheet: {cell}")
                 
                 # Extract the age range from the row above
                 age_range = re.search(REGEX_AGE_RANGE_SAMMY, cell)
@@ -86,13 +86,13 @@ def extract_tables(
                         elif "/" in age_range:
                             current_age_from, current_age_to = map(int, age_range.split("/"))
                         else:
-                            raise ValueError(f"Could not extract age range. Did not find - or /: {cell}")
+                            raise ValueError(f"Could not extract age range from row {idx} of the sheet. Did not find - or /: {cell}")
                 # Finals don't have age ranges
                 elif is_final(cell):
                     current_age_from = 0
                     current_age_to = 99
                 else:
-                    raise ValueError(f"Could not extract age range: {cell}")
+                    raise ValueError(f"Could not extract age range from row {idx} of the sheet: {cell}")
                 
         # If we have found the headers, then add the swimmer row to the current table.
         elif headers_found and not row.isnull().all():

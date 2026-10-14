@@ -1,7 +1,8 @@
 import pandas as pd
+from input_validation import require_file, require_writable_output, EXCEL_EXTENSIONS, PDF_EXTENSIONS
 from leahify_qualifiers import get_leah_tables, TIME_COLUMN_INDEX
-from reusables import match_swimmer, get_event_name, parse_name, normalise_time, read_pdf, rename_final_column, is_disqualification
-from discrepancies import display_discrepancies, TimeDiscrepancy, SwimmersNotFound
+from reusables import match_swimmer, get_event_name, parse_name, normalise_time, read_pdf, rename_final_column, is_disqualification, require_columns, check_event_counts
+from discrepancies import display_discrepancies, TimeDiscrepancy, SwimmersNotFound, UnparsedPdfLine
 
 
 def clean_name(name):
@@ -40,187 +41,193 @@ def check_qualifiers(
     pdf_path,
     progress_callback,
     confirm_callback,
-    error_callback,
 ):
     """
     Check the qualifiers excel sheet against the heat results PDF.
     """
-    try:
-        # Extract the tables using the get_leah_tables function
-        # EXTRA rows will just be added at the end of each event table, so we can re-use the same function
-        leah_tables, _, _ = get_leah_tables(output_table_path, None)
+    require_file(output_table_path, "qualifiers Excel file", EXCEL_EXTENSIONS)
+    require_file(pdf_path, "heat results PDF", PDF_EXTENSIONS)
 
-        # Get time column name
-        time_column_name = leah_tables[0].columns[TIME_COLUMN_INDEX]
+    # Extract the tables using the get_leah_tables function
+    # EXTRA rows will just be added at the end of each event table, so we can re-use the same function
+    leah_tables, _, _ = get_leah_tables(output_table_path, None)
 
-        # Rename the "Finals" column to the time column name in Leah's tables
-        rename_final_column(leah_tables, time_column_name)
+    # Get time column name
+    time_column_name = leah_tables[0].columns[TIME_COLUMN_INDEX]
 
-        # Read the PDF file
-        pdf_tables = read_pdf(pdf_path, isQualifiers=True)
+    # Rename the "Finals" column to the time column name in Leah's tables
+    rename_final_column(leah_tables, time_column_name)
 
-        # Compare output table and pdf data and alert user of any differences
+    # Read the PDF file
+    # Lines we can't parse are reported at the end rather than aborting the whole check
+    skipped_lines = []
+    pdf_tables = read_pdf(pdf_path, isQualifiers=True, skipped_lines=skipped_lines)
 
-        # List to hold any discrepancies found
-        # This is a list of (type of mismatch (int/enum), swimmer name, pdf time, leah time)
-        discrepancies = []
-        missing_in_pdf_seen = set()
+    check_event_counts(len(leah_tables), len(pdf_tables), "The qualifiers Excel file", "the heat results PDF")
 
-        def add_missing_in_pdf(swimmer_name: str, event_name: str, swimmer_time):
-            key = (clean_name(swimmer_name).lower(), event_name)
-            if key in missing_in_pdf_seen:
-                return
-            missing_in_pdf_seen.add(key)
-            discrepancies.append(
-                SwimmersNotFound(
-                    [clean_name(swimmer_name)],
-                    event_name=event_name,
-                    missing_time=str(swimmer_time).strip(),
-                )
+    # Compare output table and pdf data and alert user of any differences
+
+    # List to hold any discrepancies found
+    # This is a list of (type of mismatch (int/enum), swimmer name, pdf time, leah time)
+    discrepancies = []
+    missing_in_pdf_seen = set()
+
+    def add_missing_in_pdf(swimmer_name: str, event_name: str, swimmer_time):
+        key = (clean_name(swimmer_name).lower(), event_name)
+        if key in missing_in_pdf_seen:
+            return
+        missing_in_pdf_seen.add(key)
+        discrepancies.append(
+            SwimmersNotFound(
+                [clean_name(swimmer_name)],
+                event_name=event_name,
+                missing_time=str(swimmer_time).strip(),
             )
+        )
 
-        # Define automatic and manual matches
-        manual_matches = {}
-        automatic_matches = {}
+    # Define automatic and manual matches
+    manual_matches = {}
+    automatic_matches = {}
 
-        for tableIdx in range(len(leah_tables)):
-            # Get event name
-            event_name = get_event_name(leah_tables[tableIdx].iloc[0]['Lane'])
+    for tableIdx in range(len(leah_tables)):
+        require_columns(
+            leah_tables[tableIdx],
+            ["Lane", "Name", "Team", time_column_name],
+            f"table {tableIdx + 1} of the qualifiers Excel file",
+        )
 
-            # Split table into normal and extra rows
-            leah_normal_df, leah_extra_df = split_extra_rows(leah_tables[tableIdx])
-            
-            # For normal rows, match swimmer names and times directly
-            for _, row in leah_normal_df.iterrows():
-                # Skip Northolt and St Helens swimmers
-                if str(row["Team"]).strip() in ["Northolt", "St Helens"]:
-                    continue
+        # Get event name
+        event_name = get_event_name(leah_tables[tableIdx].iloc[0]['Lane'])
 
-                name = clean_name(row['Name']) # Remove garbage pdf-read dashes
-                time = row[time_column_name]
+        # Split table into normal and extra rows
+        leah_normal_df, leah_extra_df = split_extra_rows(leah_tables[tableIdx])
+        
+        # For normal rows, match swimmer names and times directly
+        for _, row in leah_normal_df.iterrows():
+            # Skip Northolt and St Helens swimmers
+            if str(row["Team"]).strip() in ["Northolt", "St Helens"]:
+                continue
 
-                if "Sofia" in name:
-                    pass
+            name = clean_name(row['Name']) # Remove garbage pdf-read dashes
+            time = row[time_column_name]
 
-                # If no time is recorded in Excel, treat as did-not-swim and skip missing-PDF checks.
-                if not has_recorded_time(time):
-                    continue
+            # If no time is recorded in Excel, treat as did-not-swim and skip missing-PDF checks.
+            if not has_recorded_time(time):
+                continue
 
-                # Match only with the corresponding event table
-                pdf_table = pdf_tables[tableIdx]
+            # Match only with the corresponding event table
+            pdf_table = pdf_tables[tableIdx]
 
-                clean_pdf_names = [clean_name(n) for n in pdf_table['Name'].values]
+            clean_pdf_names = [clean_name(n) for n in pdf_table['Name'].values]
 
-                if name in clean_pdf_names:
-                    matched_pdf_row = pdf_table[pdf_table['Name'].apply(clean_name) == name]
-                    if not matched_pdf_row.empty:
-                        # If we have NS in PDF and DNS in Leah, we consider them equal
-                        if matched_pdf_row['Time'].values[0] == "NS" and row[time_column_name] == "DNS":
-                            pdf_table.drop(matched_pdf_row.index, inplace=True)
-                            continue
-                        
-                        # If we have DQ with explanation, we consider them equal
-                        if is_disqualification(matched_pdf_row['Time'].values[0]) and is_disqualification(row[time_column_name]):
-                            pdf_table.drop(matched_pdf_row.index, inplace=True)
-                            continue
-
-                        # If leah is NAN and pdf is NS, then we consider it equal
-                        if pd.isna(row[time_column_name]) and matched_pdf_row['Time'].values[0] == "NS":
-                            pdf_table.drop(matched_pdf_row.index, inplace=True)
-                            continue
-
-                        # Compare times
-                        pdf_time_normalised = normalise_time(matched_pdf_row['Time'].values[0])
-                        leah_time_normalised = normalise_time(time)
-
-                        # Try to compare floats if possible
-                        float_match = False
-                        try:
-                            if float(pdf_time_normalised) == float(leah_time_normalised):
-                                float_match = True
-                        except:
-                            pass
-
-                        if not float_match and pdf_time_normalised != leah_time_normalised:
-                            discrepancies.append(TimeDiscrepancy(name, event_name, matched_pdf_row['Time'].values[0], time))
-
-                        # SUCCESSFUL MATCH
-                        # Remove matched row from pdf table
-                        pdf_table.drop(matched_pdf_row.index, inplace=True)
-
-                    # If the swimmer is not found in the PDF results
-                    else:
-                        add_missing_in_pdf(name, event_name, time)
-                else:
-                    add_missing_in_pdf(name, event_name, time)
-
-            # Reset indexes of the table
-            pdf_table.reset_index(drop=True, inplace=True)
-
-            # For this bit, it's a bit weird because Leah's extra rows are stored in
-            # Sammy's format, and the pdf tables are in Leah's format.
-            # So we use the match_swimmer function but "flip" the arguments.
-            # For each row left in the pdf table (extra rows), we try to match it with a swimmer in Leah's extra rows.
-            for _, pdf_row in pdf_table.iterrows():
-                # Match name and time
-                pdf_name = pdf_row['Name']
-                pdf_time = pdf_row['Time']
-
-                # Extract the swimmer's first name and surname from the PDF name
-                pdf_first_names, pdf_surname = parse_name(pdf_name)
-                pdf_first_name = pdf_first_names.split()[0]
-
-                # Find the swimmer in Leah's extra rows
-                # Why are the arguments flipped? See comment above
-                swimmer = match_swimmer(
-                    pdf_first_name,
-                    pdf_surname,
-                    leah_extra_df,
-                    automatic_matches,
-                    manual_matches,
-                    progress_callback=progress_callback,
-                    confirm_callback=confirm_callback,
-                    sfirst_name_col="Lane",
-                    ssurname_col="Name",
-                )
-
-                if len(swimmer) > 0:
-                    # Get full name
-                    full_name = f"{swimmer['Lane'].iloc[0]} {swimmer['Name'].iloc[0]}"
-                    
-                    # If we found a swimmer, check if the times match
-                    leah_time = swimmer[time_column_name].iloc[0]
-
+            if name in clean_pdf_names:
+                matched_pdf_row = pdf_table[pdf_table['Name'].apply(clean_name) == name]
+                if not matched_pdf_row.empty:
                     # If we have NS in PDF and DNS in Leah, we consider them equal
-                    if pdf_time == "NS" and leah_time == "DNS":
-                        pdf_table.drop(pdf_row.name, inplace=True)
+                    if matched_pdf_row['Time'].values[0] == "NS" and row[time_column_name] == "DNS":
+                        pdf_table.drop(matched_pdf_row.index, inplace=True)
                         continue
                     
                     # If we have DQ with explanation, we consider them equal
-                    if is_disqualification(pdf_time) and is_disqualification(leah_time):
-                        pdf_table.drop(pdf_row.name, inplace=True)
+                    if is_disqualification(matched_pdf_row['Time'].values[0]) and is_disqualification(row[time_column_name]):
+                        pdf_table.drop(matched_pdf_row.index, inplace=True)
+                        continue
+
+                    # If leah is NAN and pdf is NS, then we consider it equal
+                    if pd.isna(row[time_column_name]) and matched_pdf_row['Time'].values[0] == "NS":
+                        pdf_table.drop(matched_pdf_row.index, inplace=True)
                         continue
 
                     # Compare times
-                    pdf_time_normalised = normalise_time(pdf_time)
-                    leah_time_normalised = normalise_time(leah_time)
-                    if pdf_time_normalised != leah_time_normalised:
-                        discrepancies.append(TimeDiscrepancy(full_name, event_name, pdf_time, leah_time))
+                    pdf_time_normalised = normalise_time(matched_pdf_row['Time'].values[0])
+                    leah_time_normalised = normalise_time(time)
+
+                    # Try to compare floats if possible
+                    float_match = False
+                    try:
+                        if float(pdf_time_normalised) == float(leah_time_normalised):
+                            float_match = True
+                    except (ValueError, TypeError):
+                        pass
+
+                    if not float_match and pdf_time_normalised != leah_time_normalised:
+                        discrepancies.append(TimeDiscrepancy(name, event_name, matched_pdf_row['Time'].values[0], time))
 
                     # SUCCESSFUL MATCH
                     # Remove matched row from pdf table
-                    pdf_table.drop(pdf_row.name, inplace=True)
+                    pdf_table.drop(matched_pdf_row.index, inplace=True)
+
+                # If the swimmer is not found in the PDF results
                 else:
-                    # If we didn't find a swimmer, we have a mismatch
-                    # We don't know the name of the swimmer, so we just use the PDF name
-                    discrepancies.append(SwimmersNotFound([pdf_name]))
-            # If there are any swimmers left in the pdf table, they are extra rows
-            if not pdf_table.empty:
-                discrepancies.append(SwimmersNotFound(pdf_table['Name'].apply(clean_name).tolist(), pdf=False))
+                    add_missing_in_pdf(name, event_name, time)
+            else:
+                add_missing_in_pdf(name, event_name, time)
 
-        progress_callback("✅ QUALIFIER CHECK COMPLETED!", "green")
+        # Reset indexes of the table
+        pdf_table.reset_index(drop=True, inplace=True)
 
-        display_discrepancies(discrepancies, progress_callback)
-    
-    except Exception as e:
-        error_callback(f"❌ ERROR: {str(e)}", "red")
+        # For this bit, it's a bit weird because Leah's extra rows are stored in
+        # Sammy's format, and the pdf tables are in Leah's format.
+        # So we use the match_swimmer function but "flip" the arguments.
+        # For each row left in the pdf table (extra rows), we try to match it with a swimmer in Leah's extra rows.
+        for _, pdf_row in pdf_table.iterrows():
+            # Match name and time
+            pdf_name = pdf_row['Name']
+            pdf_time = pdf_row['Time']
+
+            # Extract the swimmer's first name and surname from the PDF name
+            pdf_first_names, pdf_surname = parse_name(pdf_name)
+            pdf_first_name = pdf_first_names.split()[0]
+
+            # Find the swimmer in Leah's extra rows
+            # Why are the arguments flipped? See comment above
+            swimmer = match_swimmer(
+                pdf_first_name,
+                pdf_surname,
+                leah_extra_df,
+                automatic_matches,
+                manual_matches,
+                progress_callback=progress_callback,
+                confirm_callback=confirm_callback,
+                sfirst_name_col="Lane",
+                ssurname_col="Name",
+            )
+
+            if len(swimmer) > 0:
+                # Get full name
+                full_name = f"{swimmer['Lane'].iloc[0]} {swimmer['Name'].iloc[0]}"
+                
+                # If we found a swimmer, check if the times match
+                leah_time = swimmer[time_column_name].iloc[0]
+
+                # If we have NS in PDF and DNS in Leah, we consider them equal
+                if pdf_time == "NS" and leah_time == "DNS":
+                    pdf_table.drop(pdf_row.name, inplace=True)
+                    continue
+                
+                # If we have DQ with explanation, we consider them equal
+                if is_disqualification(pdf_time) and is_disqualification(leah_time):
+                    pdf_table.drop(pdf_row.name, inplace=True)
+                    continue
+
+                # Compare times
+                pdf_time_normalised = normalise_time(pdf_time)
+                leah_time_normalised = normalise_time(leah_time)
+                if pdf_time_normalised != leah_time_normalised:
+                    discrepancies.append(TimeDiscrepancy(full_name, event_name, pdf_time, leah_time))
+
+                # SUCCESSFUL MATCH
+                # Remove matched row from pdf table
+                pdf_table.drop(pdf_row.name, inplace=True)
+            else:
+                # If we didn't find a swimmer, we have a mismatch
+                # We don't know the name of the swimmer, so we just use the PDF name
+                discrepancies.append(SwimmersNotFound([pdf_name]))
+        # If there are any swimmers left in the pdf table, they are extra rows
+        if not pdf_table.empty:
+            discrepancies.append(SwimmersNotFound(pdf_table['Name'].apply(clean_name).tolist(), pdf=False))
+
+    discrepancies.extend(UnparsedPdfLine(*skipped) for skipped in skipped_lines)
+    display_discrepancies(discrepancies, progress_callback)
+
+    progress_callback("✅ QUALIFIER CHECK COMPLETED!", "green")
