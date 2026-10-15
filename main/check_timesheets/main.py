@@ -4,6 +4,7 @@ from openpyxl import load_workbook
 import os
 
 from .read_sign_in import read_sign_in_sheet
+from .timesheet_rates import read_rates
 from discrepancies import display_discrepancies
 from error_reporting import friendly_message
 from input_validation import require_file, require_folder, EXCEL_EXTENSIONS
@@ -19,8 +20,6 @@ START_TIME_COL = "Start"
 END_TIME_COL = "End"
 HOUSE_COL = "House"
 LEVEL_COL = "Level"
-RATE_INCREASE_COL_IDX = 6
-ADMIN_RATE_INCREASE = 1.05
 PAYROLL_MONTH_LABEL = "payroll month"
 MONTH_SEARCH_ROWS = 8
 MONTH_NAMES_LOWER = {m.lower() for m in MONTHS}
@@ -33,7 +32,7 @@ def _read_month_label(df) -> str | None:
     for _, row in df.head(MONTH_SEARCH_ROWS).iterrows():
         values = list(row.values)
         for i, value in enumerate(values):
-            if isinstance(value, str) and value.strip().lower().rstrip(":") == PAYROLL_MONTH_LABEL:
+            if isinstance(value, str) and value.strip().lower().rstrip(":").rstrip("*") == PAYROLL_MONTH_LABEL:
                 for candidate in values[i + 1:]:
                     if isinstance(candidate, str) and candidate.strip():
                         return candidate.strip()
@@ -63,7 +62,7 @@ def _read_timesheet(timesheet_path) -> tuple[str, set[Entry], str | None]:
     who = f"{name} ({filename})"
     
     # Get the row index of the header
-    header_matches = df[df.iloc[:, 0] == DATE_COL].index
+    header_matches = df[df.iloc[:, 0].apply(lambda v: _clean_header(v) == DATE_COL)].index
     if len(header_matches) == 0:
         raise ValueError(f"{who}: could not find the table header (a '{DATE_COL}' cell in column A). Is this the current timesheet template?")
     header_row_index = header_matches[0]
@@ -73,7 +72,7 @@ def _read_timesheet(timesheet_path) -> tuple[str, set[Entry], str | None]:
     
     # Reset the index of the dataframe
     table_df.reset_index(drop=True, inplace=True)
-    table_df.columns = table_df.iloc[0]
+    table_df.columns = [_clean_header(c) for c in table_df.iloc[0]]
     table_df = table_df[1:]
 
     missing_cols = [c for c in (DATE_COL, START_TIME_COL, END_TIME_COL, HOUSE_COL, LEVEL_COL) if c not in table_df.columns]
@@ -84,27 +83,7 @@ def _read_timesheet(timesheet_path) -> tuple[str, set[Entry], str | None]:
     table_df = table_df[table_df[DATE_COL].apply(lambda x: isinstance(x, datetime))]
     table_df.reset_index(drop=True, inplace=True)
     
-    # Find the rate table header
-    rate_table_header = "Standard rates of pay (exclusive of holiday pay) "
-    header_row = None
-    for idx, row in df.iterrows():
-        if rate_table_header in row.values:
-            header_row = idx
-            break
-    
-    if header_row is None:
-        raise ValueError(f"{who}: could not find the rate table header '{rate_table_header.strip()}'")
-    
-    # Get rate of increase
-    raw_rate_increase = df.iloc[header_row - 1, RATE_INCREASE_COL_IDX]
-    if not pd.api.types.is_number(raw_rate_increase) or pd.isna(raw_rate_increase):
-        raise ValueError(f"{who}: the rate increase cell above the rate table is not a number (found {raw_rate_increase!r})")
-    rate_increase = 1 + raw_rate_increase
-    
-    # Read normal rates table (levels and rates)
-    level_to_rate = {}
-    read_rates_table(df, start_row=header_row + 1, levels_col=4, is_events_table=False, level_to_rate=level_to_rate, rate_increase=rate_increase)
-    read_rates_table(df, start_row=header_row + 1, levels_col=9, is_events_table=True, level_to_rate=level_to_rate, rate_increase=rate_increase)
+    rates = read_rates(df, who)
 
     # Create list of entries
     entries = set()
@@ -141,13 +120,13 @@ def _read_timesheet(timesheet_path) -> tuple[str, set[Entry], str | None]:
             raise ValueError(f"{who}: missing level on {entry_date}")
         level = row[LEVEL_COL].lower()
 
-        # Get rate
-        if level not in level_to_rate:
+        # Get rate (it can depend on the date, if the rates changed part way through the timesheet)
+        rate = rates.rate_for(level, entry_date)
+        if rate is None:
             raise ValueError(
                 f"{who}: invalid level '{row[LEVEL_COL]}' on {entry_date}. "
-                f"Valid levels are: {', '.join(sorted(level_to_rate))}"
+                f"Valid levels are: {', '.join(rates.levels())}"
             )
-        rate = level_to_rate[level]
 
         # Create entry
         entry = Entry(
@@ -251,37 +230,10 @@ def check_timesheet(
         sign_in_entries.remove(entry)
 
 
-def read_rates_table(df, start_row, levels_col, is_events_table, level_to_rate, rate_increase):
-    """Read rates table (normal or events) and populate level_to_rate dictionary."""
-    current_row = start_row
-    rates_col = levels_col + 2 if not is_events_table else levels_col + 1
+def _clean_header(value):
+    """Column headers can be marked as required with a trailing '*' (e.g. 'Date*'); ignore it."""
+    return value.strip().rstrip("*").strip() if isinstance(value, str) else value
 
-    while current_row < len(df):
-        level = df.iloc[current_row, levels_col]
-
-        # If the level is not other, read the hidden column for this rate, otherwise read the visible column
-        if level != "Other":
-            rate = df.iloc[current_row, rates_col]
-        else:
-            rate = df.iloc[current_row, rates_col - 1]
-
-        # Stop at empty row
-        if pd.isna(level) or level == "":
-            break
-        
-        # Only add if rate is not empty
-        if not pd.isna(rate) and rate != "":
-            level_to_rate[level.lower()] = rate
-        
-        current_row += 1
-    
-    # Apply rate increase if normal rates table
-    if not is_events_table:
-        for lvl in level_to_rate:
-            if lvl in ("admin", "training"):
-                level_to_rate[lvl] = round(level_to_rate[lvl] * ADMIN_RATE_INCREASE, 2)
-            elif lvl != "other":
-                level_to_rate[lvl] = round(level_to_rate[lvl] * rate_increase, 2)
 
 def _clean_filename(filename: str):
     """Remove useless info from timesheet file name attempt to sort by employee name"""
