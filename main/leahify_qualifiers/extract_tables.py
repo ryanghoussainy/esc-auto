@@ -19,8 +19,22 @@ def extract_tables(
     Extracts all tables from the given excel sheet.
     Each table must have a row where the first cell contains "first" and "name".
     This is how we identify the start of a new table.
-    The end of a table is identified by an empty row.
+    The end of a table is identified by an empty row, or by the title row of the next table
+    (a row with only its first cell filled in, directly above a header).
     '''
+
+    def _is_title_row(row: pd.Series, df: pd.DataFrame, idx: int) -> bool:
+        '''
+        Returns true if and only if the row is a table title: only the first cell is filled in
+        and the next row is a header. Tables are normally separated by an empty row, but
+        sometimes the title follows the previous table directly.
+        '''
+        return (
+            not pd.isnull(row.iloc[0])
+            and row.iloc[1:].isnull().all()
+            and idx + 1 < len(df)
+            and is_header(df.iloc[idx + 1])
+        )
 
     def is_header(row: pd.Series) -> bool:
         '''
@@ -94,6 +108,12 @@ def extract_tables(
                 else:
                     raise ValueError(f"Could not extract age range from row {idx} of the sheet: {cell}")
                 
+        # If the row is the title of the next table, then we have reached the end of the current table.
+        elif headers_found and current_table and _is_title_row(row, df, idx):
+            tables.append(pd.DataFrame(current_table[1:], columns=current_table[0]))
+            current_table = []
+            headers_found = False
+
         # If we have found the headers, then add the swimmer row to the current table.
         elif headers_found and not row.isnull().all():
             current_table.append(row.to_list())

@@ -1,5 +1,6 @@
 import pandas as pd
 from leahify_qualifiers import TIME_COLUMN_INDEX
+from leahify_qualifiers.extract_tables import extract_tables
 from leahify_qualifiers.main import add_time_column, combine_tables, restore_final_column, get_extras_per_event, add_extras_to_leah_tables
 
 
@@ -97,3 +98,25 @@ def test_add_extras_to_leah_tables_with_extras():
             added = True
             break
     assert added
+
+
+def test_extract_tables_title_directly_after_previous_table(tmp_path):
+    # Tables are normally separated by an empty row, but sometimes the next title follows directly
+    path = tmp_path / "qualifiers.xlsx"
+    header = ["First name", "Surname", "DOB", "ASA", "Group", "25m Back"]
+    rows = [
+        ["Title", None, None, None, None, None],
+        ["2017 & younger Girls (9 & under)", None, None, None, None, None],
+        header,
+        ["Ann", "Girl", None, None, "Dolphins", "20.0"],
+        ["2017& younger Boys (9 & under)", None, None, None, None, None],
+        header,
+        ["Bob", "Boy", None, None, "Dolphins", "21.0"],
+    ]
+    pd.DataFrame(rows).to_excel(path, header=False, index=False)
+
+    tables, _, info = extract_tables(str(path), None, [("First name", 0)])
+
+    assert len(tables) == 2
+    assert list(tables[1]["First name"]) == ["Bob"]
+    assert info == {("Ann", "Girl"): (0, 9, "girls"), ("Bob", "Boy"): (0, 9, "boys")}
